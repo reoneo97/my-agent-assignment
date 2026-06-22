@@ -1,0 +1,25 @@
+services:
+  app:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      OLA_DB_PATH: /app/data/ola.db
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  # CLI demo — run with: docker compose run --rm demo 5
+  demo:
+    build: .
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    environment:
+      OLA_DB_PATH: /app/data/ola.db
+    command: ["uv", "run", "python", "scripts/demo.py", "${N:-10}"]
+    profiles:
+      - demo
