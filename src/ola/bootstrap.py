@@ -57,8 +57,12 @@ async def _run_manual_extractor(manuals_dir: Path) -> None:
 async def run_initialization(manuals_dir: Path | None = None) -> None:
     """Idempotent bootstrap. Neo4j must be reachable before calling."""
     from ola.kg.seed import apply_schema, apply_seed
+    from ola.telemetry import setup_tracing
 
     print("── OLA Bootstrap ─────────────────────")
+    print("0. Tracing …")
+    setup_tracing()
+
     print("1. KG schema …")
     apply_schema()
 

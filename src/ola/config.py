@@ -28,3 +28,8 @@ MODEL_NAME = FAST_MODEL_NAME
 NEO4J_URI = os.environ.get("NEO4J_URI", "bolt://localhost:7687")
 NEO4J_USER = os.environ.get("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.environ.get("NEO4J_PASSWORD", "password")
+
+# MLflow — tracing + eval
+MLFLOW_ENABLED = os.environ.get("MLFLOW_ENABLED", "true").lower() == "true"
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "mlruns")
+MLFLOW_EXPERIMENT = os.environ.get("MLFLOW_EXPERIMENT", "ola-dev")

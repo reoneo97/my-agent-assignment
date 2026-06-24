@@ -1,4 +1,4 @@
-.PHONY: install sync lint lint-fix typecheck check test up down demo-docker clean
+.PHONY: install sync lint lint-fix typecheck check test eval mlflow-ui up down clean
 
 # ── Dev setup ─────────────────────────────────────────────────────────────────
 
@@ -11,20 +11,28 @@ sync:
 # ── Quality ───────────────────────────────────────────────────────────────────
 
 lint:
-	uv run python -m ruff check src tests sim scripts api
+	uv run python -m ruff check src tests sim scripts api eval
 
 lint-fix:
-	uv run python -m ruff check --fix src tests sim scripts api
+	uv run python -m ruff check --fix src tests sim scripts api eval
 
 typecheck:
-	uv run python -m mypy src tests sim scripts api
+	uv run python -m mypy src tests sim scripts api eval
 
 check: lint typecheck
 
-# ── Tests (no network) ────────────────────────────────────────────────────────
+# ── Tests — deterministic, no LLM, no MLflow ─────────────────────────────────
 
 test:
 	uv run python -m pytest tests/ -v
+
+# ── Eval — MLflow logging ─────────────────────────────────────────────────────
+
+eval:
+	uv run python -m eval.run --operator-id $(or $(OPERATOR),op-demo-01) --n $(or $(N),10)
+
+mlflow-ui:
+	uv run mlflow ui --backend-store-uri mlruns
 
 # ── Docker ────────────────────────────────────────────────────────────────────
 
@@ -34,12 +42,9 @@ up:
 down:
 	docker compose down
 
-demo-docker:
-	N=$(N) docker compose --profile demo run --rm demo
-
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
 clean:
 	rm -rf .venv __pycache__ .mypy_cache .ruff_cache *.db
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-	rm -rf ui/node_modules ui/dist
+	rm -rf ui/node_modules ui/dist mlruns

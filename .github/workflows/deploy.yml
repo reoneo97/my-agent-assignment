@@ -34,6 +34,5 @@ jobs:
           script: |
             set -e
             cd /opt/ola
-            git pull origin main
-            docker compose up --build -d app
+            bash scripts/deploy.sh
             docker image prune -f

@@ -18,6 +18,17 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  mlflow:
+    build: .
+    command: ["uv", "run", "mlflow", "server",
+              "--host", "0.0.0.0", "--port", "5000",
+              "--backend-store-uri", "/mlflow"]
+    volumes:
+      - mlflow_data:/mlflow
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+
   app:
     build: .
     env_file:
@@ -27,29 +38,17 @@ services:
     environment:
       OLA_DB_PATH: /app/data/ola.db
       NEO4J_URI: bolt://neo4j:7687
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_EXPERIMENT: ola-dev
     ports:
       - "8000:8000"
     depends_on:
       neo4j:
         condition: service_healthy
+      mlflow:
+        condition: service_started
     restart: unless-stopped
-
-  # CLI demo — run with: docker compose run --rm demo 5
-  demo:
-    build: .
-    env_file:
-      - .env
-    volumes:
-      - ./data:/app/data
-    environment:
-      OLA_DB_PATH: /app/data/ola.db
-      NEO4J_URI: bolt://neo4j:7687
-    command: ["uv", "run", "python", "scripts/demo.py", "${N:-10}"]
-    depends_on:
-      neo4j:
-        condition: service_healthy
-    profiles:
-      - demo
 
 volumes:
   neo4j_data:
+  mlflow_data:

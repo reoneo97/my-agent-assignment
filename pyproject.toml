@@ -9,12 +9,13 @@ description = "Operator Learning Assistant — Stage 1: Core Learning Loop"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.0",
-    "pydantic-ai>=0.0.14",
+    "pydantic-ai>=0.0.14,<1.0",
     "openai>=1.0",
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
     "python-dotenv>=1.0",
     "neo4j>=5.0",
+    "mlflow>=3.2.0",
 ]
 
 [project.optional-dependencies]
