@@ -8,7 +8,7 @@
 ```
 MachineType   {name}                                  # DieAttach, WireBond, FlipChip
 Machine       {id, line, install_date}                # 5 per type
-AlarmCode     {code, severity, complexity, category}  # category = mechanical|process|sensor|recipe
+AlarmCode     {code, severity, complexity, category, expected_disposition}  # category = mechanical|process|sensor|recipe expected_disposition= self_resolve, escalate, either
 Procedure     {id, title}
 ProcedureStep {id, order, text}                        # keep if showing step-level conformance; else drop
 Skill         {name}

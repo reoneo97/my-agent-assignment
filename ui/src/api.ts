@@ -1,41 +1,58 @@
-import type { StreamEvent } from "./types";
+import type {
+  InteractionResponse,
+  Operator,
+  Profile,
+  ShiftEndResponse,
+  Synopsis,
+} from "./types";
 
-export async function* streamChat(
-  message: string,
-  operatorId: string,
-  signal: AbortSignal
-): AsyncGenerator<StreamEvent> {
-  const response = await fetch("/api/chat", {
+async function post<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, operator_id: operatorId }),
-    signal,
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
   });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`${res.status}: ${detail}`);
   }
+  return res.json();
+}
 
-  const reader = response.body!.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`${res.status}`);
+  return res.json();
+}
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+export function sendUserMessage(operatorId: string, message: string): Promise<InteractionResponse> {
+  return post("/api/interaction", { operator_id: operatorId, source: "user", message });
+}
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
+export function sendSimulated(operatorId: string): Promise<InteractionResponse> {
+  return post("/api/interaction", { operator_id: operatorId, source: "simulated" });
+}
 
-    for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        try {
-          yield JSON.parse(line.slice(6)) as StreamEvent;
-        } catch {
-          // skip malformed lines
-        }
-      }
-    }
-  }
+export function endShift(operatorId: string, shift = "day"): Promise<ShiftEndResponse> {
+  return post("/api/shift/end", { operator_id: operatorId, shift });
+}
+
+export function fetchProfile(operatorId: string): Promise<Profile> {
+  return get(`/api/profile/${operatorId}`);
+}
+
+export function fetchSynopsis(operatorId: string): Promise<Synopsis> {
+  return get(`/api/synopsis/${operatorId}`);
+}
+
+export function fetchOperators(): Promise<{ operators: Operator[] }> {
+  return get("/api/operators");
+}
+
+export function resetOperator(operatorId: string): Promise<void> {
+  return post(`/api/reset/${operatorId}`);
+}
+
+export function fetchEval(operatorId: string): Promise<unknown> {
+  return get(`/api/eval/${operatorId}`);
 }

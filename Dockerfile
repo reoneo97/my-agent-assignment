@@ -10,6 +10,7 @@ WORKDIR /app
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Install deps first for layer caching
 COPY pyproject.toml uv.lock* ./
 RUN uv sync --no-dev --no-install-project
 
@@ -17,10 +18,14 @@ COPY src/ ./src/
 COPY sim/ ./sim/
 COPY scripts/ ./scripts/
 COPY api/ ./api/
+COPY data/ ./data/
+COPY entrypoint.sh ./
 COPY --from=ui-builder /ui/dist ./ui/dist
 
-RUN uv sync --no-dev
+RUN uv sync --no-dev && chmod +x entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Bootstrap runs python -m ola.bootstrap (idempotent), then execs uvicorn.
+# Neo4j must be healthy before this container starts (compose depends_on).
+ENTRYPOINT ["./entrypoint.sh"]

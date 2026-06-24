@@ -1,11 +1,24 @@
 export type TierStatus = "tentative" | "established" | "confirmed";
 
-export interface MemoryItemSummary {
+export interface ProfileItem {
   id: string;
   text: string;
   category: string;
   status: TierStatus;
   evidence_count: number;
+  source_event_ids: string[];
+  last_updated: string;
+}
+
+export interface Profile {
+  operator_id: string;
+  items: ProfileItem[];
+}
+
+export interface Signal {
+  category: string;
+  value: string;
+  observation: string;
 }
 
 export interface MemoryOp {
@@ -15,18 +28,60 @@ export interface MemoryOp {
   category: string | null;
 }
 
-// SSE event union
-export type StreamEvent =
-  | { type: "ops"; ops: MemoryOp[] }
-  | { type: "profile"; items: MemoryItemSummary[] }
-  | { type: "chunk"; text: string }
-  | { type: "done" }
-  | { type: "error"; message: string };
+export interface InteractionSummary {
+  id: string;
+  operator_message: string;
+  timestamp: string;
+  alarm_code: string | null;
+  shift: string | null;
+}
+
+export interface InteractionResponse {
+  interaction: InteractionSummary;
+  assistant_reply: string;
+  signals_extracted: Signal[];
+  memory_operations: MemoryOp[];
+  profile: Profile;
+}
+
+export interface TierTransition {
+  item_id: string;
+  from_status: string;
+  to_status: string;
+}
+
+export interface ShiftChanges {
+  tier_transitions: TierTransition[];
+  new_items: ProfileItem[];
+  superseded: { item_id: string; by: string }[];
+}
+
+export interface ShiftEndResponse {
+  no_significant_updates: boolean;
+  changes: ShiftChanges;
+  profile_before: Profile;
+  profile_after: Profile;
+  synopsis_before: string;
+  synopsis_after: string;
+}
+
+export interface Synopsis {
+  text: string;
+  generated_at: string;
+  version: number;
+}
+
+export interface Operator {
+  id: string;
+  name: string;
+  machine_type: string;
+}
 
 export interface Message {
   id: string;
   role: "user" | "assistant";
   text: string;
+  signals?: Signal[];
   ops?: MemoryOp[];
-  streaming?: boolean;
+  loading?: boolean;
 }

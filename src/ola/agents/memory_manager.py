@@ -35,6 +35,7 @@ class OpDecision(BaseModel):
     target_item_id: str | None = None
     text: str | None = None
     category: str | None = None  # TraitCategory value
+    rationale: str = ""  # brief, for auditability
 
 
 class OperationList(BaseModel):
@@ -80,7 +81,8 @@ Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
 
     ops: list[MemoryOperation] = []
     now = datetime.now(timezone.utc)
-    for dec in result.output.operations:
+    decisions = result.output.operations
+    for i, dec in enumerate(decisions):
         op_type = dec.op_type.upper()
         if op_type not in {"ADD", "REINFORCE", "SUPERSEDE", "NOOP"}:
             op_type = "NOOP"
@@ -94,6 +96,9 @@ Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
             except ValueError:
                 category = None
 
+        # Carry the normalized value from the corresponding signal (by index).
+        signal_value = signals[i].value if i < len(signals) else None
+
         ops.append(
             MemoryOperation(
                 id=str(uuid.uuid4()),
@@ -101,8 +106,11 @@ Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
                 op_type=op_type,  # type: ignore[arg-type]
                 target_item_id=dec.target_item_id if op_type in {"REINFORCE", "SUPERSEDE"} else None,
                 text=dec.text if op_type in {"ADD", "SUPERSEDE"} else None,
+                value=signal_value if op_type in {"ADD", "SUPERSEDE"} else None,
                 category=category,
                 source_event_id=source_event_id,
+                rationale=dec.rationale,
+                source="hot_path",
                 timestamp=now,
             )
         )

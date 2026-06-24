@@ -3,15 +3,19 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class OperatorInteraction(BaseModel):
     id: str
     operator_id: str
+    session_id: str = ""          # set by pipeline before appending
+    role: Literal["operator", "assistant"] = "operator"
     timestamp: datetime
     shift: Literal["day", "night"] | None = None
-    event_type: str  # e.g. "alarm", "question", "task"
+    machine_id: str | None = None
+    event_type: str               # alarm | question | task | reply | confirmation_response
     alarm_code: str | None = None
-    raw_text: str
-    outcome: str | None = None  # e.g. "resolved_independently", "escalated"
+    requested_modality: str | None = None
+    content: str                  # raw message text (was raw_text in v1)
+    outcome: str | None = None    # resolved_independently | escalated | unresolved

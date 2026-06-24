@@ -1,4 +1,23 @@
 services:
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-password}
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1g
+    ports:
+      - "7474:7474"   # Neo4j Browser
+      - "7687:7687"   # Bolt
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD", "neo4j", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
   app:
     build: .
     env_file:
@@ -7,8 +26,12 @@ services:
       - ./data:/app/data
     environment:
       OLA_DB_PATH: /app/data/ola.db
+      NEO4J_URI: bolt://neo4j:7687
     ports:
       - "8000:8000"
+    depends_on:
+      neo4j:
+        condition: service_healthy
     restart: unless-stopped
 
   # CLI demo — run with: docker compose run --rm demo 5
@@ -20,6 +43,13 @@ services:
       - ./data:/app/data
     environment:
       OLA_DB_PATH: /app/data/ola.db
+      NEO4J_URI: bolt://neo4j:7687
     command: ["uv", "run", "python", "scripts/demo.py", "${N:-10}"]
+    depends_on:
+      neo4j:
+        condition: service_healthy
     profiles:
       - demo
+
+volumes:
+  neo4j_data:

@@ -1,15 +1,12 @@
-.PHONY: install sync lint lint-fix typecheck check test api ui demo build up down clean
+.PHONY: install sync lint lint-fix typecheck check test up down demo-docker clean
 
 # ── Dev setup ─────────────────────────────────────────────────────────────────
 
-install: ui-install
-	uv sync --all-extras
+install:
+	uv sync --all-extras && cd ui && npm install
 
 sync:
 	uv sync
-
-ui-install:
-	cd ui && npm install
 
 # ── Quality ───────────────────────────────────────────────────────────────────
 
@@ -29,30 +26,14 @@ check: lint typecheck
 test:
 	uv run python -m pytest tests/ -v
 
-# ── Local dev servers ─────────────────────────────────────────────────────────
+# ── Docker ────────────────────────────────────────────────────────────────────
 
-# FastAPI backend with hot reload (requires .env)
-api:
-	uv run uvicorn api.main:app --reload --port 8000
-
-# React dev server — proxies /api → localhost:8000
-ui:
-	cd ui && npm run dev
-
-# CLI demo (requires .env)
-demo:
-	uv run python scripts/demo.py $(N)
-
-# ── Docker (single container: API + UI) ───────────────────────────────────────
-
-# Build and start — app available at http://localhost:8000
 up:
 	docker compose up --build
 
 down:
 	docker compose down
 
-# CLI demo via Docker
 demo-docker:
 	N=$(N) docker compose --profile demo run --rm demo
 
