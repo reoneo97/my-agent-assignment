@@ -10,3 +10,4 @@ data/*.db
 ui/node_modules/
 ui/dist/
 .pytest_cache/
+docs/
