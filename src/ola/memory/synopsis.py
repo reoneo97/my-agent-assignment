@@ -7,11 +7,13 @@ from pathlib import Path
 from typing import Any
 
 from ola.config import DB_PATH
+from ola.memory.store import _init_schema
 
 
 def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    _init_schema(conn)
     return conn
 
 

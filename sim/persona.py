@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -90,6 +90,8 @@ You have the following behavioural traits at this stage:
 Generate a realistic operator interaction for the current situation.
 The interaction should be consistent with your traits — do not break character.
 Keep the raw_text to 2-4 sentences, first-person.
+Set outcome to exactly one of: resolved_independently, escalated, unresolved
+— pick whichever best matches how the situation concluded; do not describe it in prose.
 """
 
 
@@ -97,7 +99,7 @@ class InteractionSpec(BaseModel):
     event_type: str
     alarm_code: str | None
     shift: str
-    outcome: str
+    outcome: Literal["resolved_independently", "escalated", "unresolved"]
     raw_text: str
 
 
@@ -148,7 +150,7 @@ async def get_next_interaction(operator_id: str) -> OperatorInteraction:
         shift=spec.shift if spec.shift in ("day", "night") else gt["early_traits"].get("shift", "day"),  # type: ignore[arg-type]
         event_type=spec.event_type or event_type,
         alarm_code=alarm_code,
-        raw_text=spec.raw_text,
+        content=spec.raw_text,
         outcome=spec.outcome,
     )
 

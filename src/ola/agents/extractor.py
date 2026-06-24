@@ -39,7 +39,7 @@ Operator interaction:
   shift: {interaction.shift}
   alarm_code: {interaction.alarm_code}
   outcome: {interaction.outcome}
-  text: {interaction.raw_text}
+  text: {interaction.content}
 
 Valid categories: {_CATEGORIES}
 

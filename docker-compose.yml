@@ -20,13 +20,17 @@ services:
 
   mlflow:
     build: .
+    entrypoint: []
+    environment:
+      MLFLOW_ALLOW_FILE_STORE: "true"
     command: ["uv", "run", "mlflow", "server",
               "--host", "0.0.0.0", "--port", "5000",
-              "--backend-store-uri", "/mlflow"]
+              "--backend-store-uri", "/mlflow",
+              "--allowed-hosts", "localhost,127.0.0.1,localhost:5050,127.0.0.1:5050,mlflow,mlflow:5000"]
     volumes:
       - mlflow_data:/mlflow
     ports:
-      - "5000:5000"
+      - "5050:5000"   # host 5000 is taken by macOS AirPlay Receiver
     restart: unless-stopped
 
   app:

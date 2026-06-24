@@ -12,6 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from ola.api.routes import router  # noqa: E402
+from ola.telemetry import setup_tracing  # noqa: E402
+
+setup_tracing()
 
 app = FastAPI(title="Operator Learning Assistant API")
 
@@ -27,6 +30,6 @@ app.add_middleware(
 app.include_router(router)
 
 # Serve the React build when running in Docker (ui/dist copied into image)
-_UI_DIR = Path(__file__).parent.parent.parent.parent.parent / "ui" / "dist"
+_UI_DIR = Path(__file__).parent.parent.parent.parent / "ui" / "dist"
 if _UI_DIR.exists():
     app.mount("/", StaticFiles(directory=_UI_DIR, html=True), name="ui")

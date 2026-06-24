@@ -67,7 +67,7 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
             timestamp=datetime.now(timezone.utc),
             shift="day",
             event_type="question",
-            raw_text=req.message,
+            content=req.message,
         )
 
     signals, ops, profile, reply = await process_interaction(interaction_obj, db_path=_DB)
@@ -75,7 +75,7 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
     return InteractionResponse(
         interaction=InteractionOut(
             id=interaction_obj.id,
-            operator_message=interaction_obj.raw_text,
+            operator_message=interaction_obj.content,
             timestamp=interaction_obj.timestamp,
             alarm_code=interaction_obj.alarm_code,
             shift=interaction_obj.shift,
