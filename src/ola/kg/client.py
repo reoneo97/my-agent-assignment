@@ -14,11 +14,14 @@ def get_driver():  # type: ignore[return]
         return _driver
     try:
         from neo4j import GraphDatabase  # type: ignore[import]
-        _driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-        _driver.verify_connectivity()
-        return _driver
+        driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
+        driver.verify_connectivity()
     except Exception:
+        # Don't cache a driver that failed to verify — retry on next call
+        # instead of permanently returning a dead driver to every caller.
         return None
+    _driver = driver
+    return _driver
 
 
 def run_query(cypher: str, params: dict[str, Any] | None = None) -> list[dict[str, Any]]:
