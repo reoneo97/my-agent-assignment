@@ -7,6 +7,8 @@ interface Props {
   messages: Message[];
   onSendUser: (text: string) => void;
   onSendSimulated: () => void;
+  onCloseSession: (outcome: "resolved_independently" | "escalated") => void;
+  activeAlarm: boolean;
   busy: boolean;
 }
 
@@ -59,7 +61,7 @@ function LearnedAnnotation({ signals, ops }: { signals?: Signal[]; ops?: MemoryO
   );
 }
 
-export default function ConversationPanel({ messages, onSendUser, onSendSimulated, busy }: Props) {
+export default function ConversationPanel({ messages, onSendUser, onSendSimulated, onCloseSession, activeAlarm, busy }: Props) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +82,9 @@ export default function ConversationPanel({ messages, onSendUser, onSendSimulate
         {messages.length === 0 && (
           <p style={s.empty}>Type a message or click "Next Interaction" to begin.</p>
         )}
-        {messages.map((msg) => (
+        {messages.map((msg) => msg.role === "system" ? (
+          <div key={msg.id} style={s.systemBanner}>⚠ {msg.text}</div>
+        ) : (
           <div key={msg.id} style={{ ...s.bubble, ...(msg.role === "user" ? s.userBubble : s.asstBubble) }}>
             <span style={s.roleLabel}>{msg.role === "user" ? "Operator" : "Assistant"}</span>
             {msg.role === "assistant" ? (
@@ -117,6 +121,20 @@ export default function ConversationPanel({ messages, onSendUser, onSendSimulate
         <button style={s.simBtn} onClick={onSendSimulated} disabled={busy}>
           Next Interaction
         </button>
+        <button
+          style={s.resolveBtn}
+          onClick={() => onCloseSession("resolved_independently")}
+          disabled={busy || !activeAlarm}
+        >
+          Mark Resolved
+        </button>
+        <button
+          style={s.escalateBtn}
+          onClick={() => onCloseSession("escalated")}
+          disabled={busy || !activeAlarm}
+        >
+          Escalate
+        </button>
       </div>
     </div>
   );
@@ -145,4 +163,7 @@ const s: Record<string, React.CSSProperties> = {
   input: { flex: 1, background: "#1a2030", border: "1px solid #1e2535", borderRadius: 8, padding: "10px 14px", color: "#e2e8f0", fontSize: 14, outline: "none" },
   sendBtn: { background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontSize: 14, fontWeight: 600, cursor: "pointer" },
   simBtn: { background: "#1e2535", color: "#94a3b8", border: "1px solid #334155", borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 500, cursor: "pointer" },
+  resolveBtn: { background: "transparent", color: "#4ade80", border: "1px solid #16653f", borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  escalateBtn: { background: "transparent", color: "#f87171", border: "1px solid #7f1d1d", borderRadius: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  systemBanner: { alignSelf: "center", fontSize: 12, color: "#fbbf24", background: "#251c08", border: "1px solid #5c4716", borderRadius: 8, padding: "8px 16px", fontFamily: "monospace" },
 };

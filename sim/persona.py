@@ -112,6 +112,10 @@ def get_operators() -> list[dict]:
     return OPERATORS
 
 
+def get_machine_type(operator_id: str) -> str | None:
+    return next((op["machine_type"] for op in OPERATORS if op["id"] == operator_id), None)
+
+
 async def get_next_interaction(operator_id: str) -> OperatorInteraction:
     """Generate the next scenario interaction for the given operator."""
     gt = _GROUND_TRUTH.get(operator_id)

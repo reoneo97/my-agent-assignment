@@ -10,7 +10,7 @@ class OperatorInteraction(BaseModel):
     id: str
     operator_id: str
     session_id: str = ""          # set by pipeline before appending
-    role: Literal["operator", "assistant"] = "operator"
+    role: Literal["operator", "assistant", "system"] = "operator"
     timestamp: datetime
     shift: Literal["day", "night"] | None = None
     machine_id: str | None = None
@@ -18,4 +18,4 @@ class OperatorInteraction(BaseModel):
     alarm_code: str | None = None
     requested_modality: str | None = None
     content: str                  # raw message text (was raw_text in v1)
-    outcome: str | None = None    # resolved_independently | escalated | unresolved
+    outcome: Literal["resolved_independently", "escalated", "unresolved", "abandoned"] | None = None

@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS events (
     shift TEXT, machine_id TEXT, alarm_code TEXT, event_type TEXT NOT NULL,
     requested_modality TEXT, content TEXT NOT NULL, outcome TEXT
 );
+-- role/outcome/status enums are unconstrained here (no CHECK); enforced in data/sql/schema.sql
 CREATE TABLE IF NOT EXISTS signals (
     id TEXT PRIMARY KEY, source_event_id TEXT NOT NULL, operator_id TEXT NOT NULL,
     category TEXT NOT NULL, value TEXT NOT NULL, observation TEXT, timestamp TEXT NOT NULL
@@ -133,6 +134,27 @@ def get_or_create_session(
     return open_session(operator_id, trigger_alarm_code, machine_id, db_path=db_path)
 
 
+def get_session(session_id: str, db_path: str = DB_PATH) -> dict[str, Any] | None:
+    conn = _connect(db_path)
+    row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_open_session_activity(operator_id: str, db_path: str = DB_PATH) -> dict[str, Any] | None:
+    """Open session id + last activity timestamp (latest event, or opened_at if none yet)."""
+    conn = _connect(db_path)
+    row = conn.execute(
+        """SELECT s.id AS id, COALESCE(MAX(e.timestamp), s.opened_at) AS last_activity
+           FROM sessions s LEFT JOIN events e ON e.session_id = s.id
+           WHERE s.operator_id = ? AND s.status = 'open'
+           GROUP BY s.id ORDER BY s.opened_at DESC LIMIT 1""",
+        (operator_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
 # ── Events ────────────────────────────────────────────────────────────────────
 
 def append_event(interaction: OperatorInteraction, db_path: str = DB_PATH) -> None:
@@ -165,7 +187,7 @@ def get_session_thread(session_id: str, db_path: str = DB_PATH) -> list[dict[str
     """Return all events for a session ordered by timestamp (both roles)."""
     conn = _connect(db_path)
     rows = conn.execute(
-        "SELECT role, event_type, content, timestamp FROM events WHERE session_id = ? ORDER BY timestamp ASC",
+        "SELECT id, role, event_type, content, timestamp FROM events WHERE session_id = ? ORDER BY timestamp ASC",
         (session_id,),
     ).fetchall()
     conn.close()

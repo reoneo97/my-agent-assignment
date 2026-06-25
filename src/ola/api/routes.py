@@ -6,11 +6,14 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 
 from ola.api.schemas import (
+    AlarmOut,
     EvalResponse,
     InteractionRequest,
     InteractionResponse,
     InteractionOut,
     MemoryOpOut,
+    MockAlarmRequest,
+    MockAlarmResponse,
     OperatorsResponse,
     ProfileItemOut,
     ProfileOut,
@@ -23,6 +26,7 @@ from ola.api.schemas import (
 from ola.consolidation import run_consolidation
 from ola.memory.store import get_profile, get_synopsis, reset_operator
 from ola.pipeline import process_interaction
+from ola.sessions import open_alarm_session
 
 router = APIRouter()
 
@@ -57,17 +61,21 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
     if req.source == "simulated":
         interaction_obj = await get_next_interaction(req.operator_id)
     else:
-        if not req.message:
+        if not req.message and not req.outcome:
             raise HTTPException(status_code=422, detail="message is required when source=user")
         from ola.domain.events import OperatorInteraction
         import uuid
+        content = req.message
+        if not content and req.outcome:
+            content = f"Marked {req.outcome.replace('_', ' ')}."
         interaction_obj = OperatorInteraction(
             id=str(uuid.uuid4()),
             operator_id=req.operator_id,
             timestamp=datetime.now(timezone.utc),
             shift="day",
-            event_type="question",
-            content=req.message,
+            event_type="resolution_action" if req.outcome else "question",
+            outcome=req.outcome,
+            content=content,
         )
 
     signals, ops, profile, reply = await process_interaction(interaction_obj, db_path=_DB)
@@ -95,6 +103,26 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
             for op in ops
         ],
         profile=_profile_out(req.operator_id),
+    )
+
+
+# ── POST /api/alarm/mock ──────────────────────────────────────────────────────
+
+@router.post("/api/alarm/mock", response_model=MockAlarmResponse)
+async def mock_alarm(req: MockAlarmRequest) -> MockAlarmResponse:
+    result = await open_alarm_session(req.operator_id, db_path=_DB)
+    kg = result["kg_context"]
+    return MockAlarmResponse(
+        session_id=result["session_id"],
+        alarm=AlarmOut(
+            code=result["alarm_code"],
+            machine_id=result["machine_id"],
+            complexity=kg.get("complexity"),
+            severity=kg.get("severity"),
+            expected_disposition=kg.get("expected_disposition"),
+        ),
+        system_message=f"Alarm {result['alarm_code']} fired on {result['machine_id'] or 'an unspecified machine'}.",
+        proactive_reply=result["proactive_message"],
     )
 
 

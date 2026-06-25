@@ -9,6 +9,13 @@ ESTABLISHED_THRESHOLD = 3  # evidence_count >= this => established
 # SQLite DB path
 DB_PATH = os.environ.get("OLA_DB_PATH", "ola.db")
 
+# Session lifecycle
+SESSION_INACTIVITY_TIMEOUT_MINUTES = int(os.environ.get("SESSION_INACTIVITY_TIMEOUT_MINUTES", "30"))
+
+# Basic auth for the app (API + UI) — disabled unless both are set.
+BASIC_AUTH_USER = os.environ.get("BASIC_AUTH_USER", "")
+BASIC_AUTH_PASSWORD = os.environ.get("BASIC_AUTH_PASSWORD", "")
+
 # LLM provider — fast model for hot path, strong model for Reviewer / Manual Extractor
 MODEL_BASE_URL = os.environ.get("MODEL_BASE_URL", "https://openrouter.ai/api/v1")
 MODEL_API_KEY = os.environ.get("MODEL_API_KEY", "")

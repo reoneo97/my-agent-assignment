@@ -5,7 +5,7 @@ Gracefully returns empty results if Neo4j is unavailable.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from ola.kg.client import run_query
 
@@ -75,6 +75,52 @@ def get_escalation_candidates(alarm_code: str, current_shift: str, exclude_opera
         """,
         {"code": alarm_code, "shift": current_shift, "exclude": exclude_operator},
     )
+
+
+def list_alarm_codes(machine_type: str | None = None) -> list[dict[str, Any]]:
+    """All AlarmCodes, optionally filtered to those occurring on a given MachineType."""
+    if machine_type:
+        return run_query(
+            """
+            MATCH (a:AlarmCode)-[:OCCURS_ON_TYPE]->(:MachineType {name: $mt})
+            RETURN a.code AS code, a.complexity AS complexity, a.severity AS severity,
+                   a.category AS category, a.expected_disposition AS expected_disposition
+            """,
+            {"mt": machine_type},
+        )
+    return run_query(
+        """
+        MATCH (a:AlarmCode)
+        RETURN a.code AS code, a.complexity AS complexity, a.severity AS severity,
+               a.category AS category, a.expected_disposition AS expected_disposition
+        """
+    )
+
+
+def list_machines(machine_type: str) -> list[str]:
+    """Machine ids of a given MachineType."""
+    rows = run_query(
+        "MATCH (m:Machine)-[:OF_TYPE]->(:MachineType {name: $mt}) RETURN m.id AS id",
+        {"mt": machine_type},
+    )
+    return [r["id"] for r in rows]
+
+
+def get_operator_alarm_disposition(
+    operator_id: str, alarm_code: str
+) -> Literal["confident", "struggles", "unknown"]:
+    """Direct CONFIDENT_WITH/STRUGGLES_WITH edge on this exact alarm code (not sibling transfer)."""
+    rows = run_query(
+        """
+        MATCH (:Operator {id: $op})-[r:CONFIDENT_WITH|STRUGGLES_WITH]->(:AlarmCode {code: $code})
+        RETURN type(r) AS rel_type
+        LIMIT 1
+        """,
+        {"op": operator_id, "code": alarm_code},
+    )
+    if not rows:
+        return "unknown"
+    return "confident" if rows[0]["rel_type"] == "CONFIDENT_WITH" else "struggles"
 
 
 def get_operator_learned_edges(operator_id: str) -> dict[str, list[dict[str, Any]]]:
