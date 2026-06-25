@@ -18,7 +18,12 @@ BASIC_AUTH_PASSWORD = os.environ.get("BASIC_AUTH_PASSWORD", "")
 
 # LLM provider — fast model for hot path, strong model for Reviewer / Manual Extractor
 MODEL_BASE_URL = os.environ.get("MODEL_BASE_URL", "https://openrouter.ai/api/v1")
-MODEL_API_KEY = os.environ.get("MODEL_API_KEY", "")
+# Agent objects are constructed eagerly at module import time (see agents/*.py),
+# which builds an AsyncOpenAI client that raises if api_key is empty/missing —
+# even in contexts (pure unit tests, CI without secrets) that never make a real
+# call. A non-empty placeholder lets that construction succeed; a real call
+# without a real key still fails normally, just at call time instead of import time.
+MODEL_API_KEY = os.environ.get("MODEL_API_KEY") or "sk-no-key-configured"
 
 FAST_MODEL_NAME = os.environ.get(
     "FAST_MODEL_NAME",
