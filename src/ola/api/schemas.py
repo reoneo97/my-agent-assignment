@@ -28,7 +28,8 @@ class ProfileOut(BaseModel):
 class InteractionRequest(BaseModel):
     operator_id: str = "op-demo-01"
     source: Literal["user", "simulated"] = "user"
-    message: str | None = None   # required when source="user"
+    message: str | None = None   # required when source="user" and outcome is not set
+    outcome: Literal["resolved_independently", "escalated"] | None = None  # explicit Resolve/Escalate action
 
 
 class SignalOut(BaseModel):
@@ -112,6 +113,27 @@ class OperatorOut(BaseModel):
 
 class OperatorsResponse(BaseModel):
     operators: list[OperatorOut]
+
+
+# ── /api/alarm/mock ───────────────────────────────────────────────────────────
+
+class MockAlarmRequest(BaseModel):
+    operator_id: str = "op-demo-01"
+
+
+class AlarmOut(BaseModel):
+    code: str | None
+    machine_id: str | None
+    complexity: str | None = None
+    severity: str | None = None
+    expected_disposition: str | None = None
+
+
+class MockAlarmResponse(BaseModel):
+    session_id: str
+    alarm: AlarmOut
+    system_message: str
+    proactive_reply: str | None = None
 
 
 # ── /api/eval ─────────────────────────────────────────────────────────────────

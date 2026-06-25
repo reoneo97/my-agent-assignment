@@ -49,7 +49,7 @@ class Session(BaseModel):
     closed_at: datetime | None = None
     trigger_alarm_code: str | None = None
     machine_id: str | None = None
-    status: Literal["open", "resolved", "escalated"] = "open"
+    status: Literal["open", "resolved", "escalated", "abandoned"] = "open"
 
 
 class Hypothesis(BaseModel):

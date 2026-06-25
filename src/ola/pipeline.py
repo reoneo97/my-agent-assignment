@@ -1,18 +1,18 @@
 """
 Pipeline — hot path entrypoint. Deterministic orchestration; no routing LLM.
 
-Flow (§6.2 of PRD v2):
-  1. Session management (open or continue)
+Flow (§6.2 of PRD v2; session semantics per docs/sessions.md):
+  1. Session management (close if timed out; open or continue; backfill alarm/machine from session)
   2. Append operator event
   3. Extractor → signals → persist
   4. Memory Manager → operations → persist
   5. Tier recompute → Projection for newly-established items
-  6. Conformance Router → PENDING conformance_event if SOP exists
+  6. (Conformance Router runs at step 10, on close, not here)
   7. Context Assembler → ContextBundle
   8. Validation Gate → validation_directive
   9. Responder → reply
   10. Append assistant event
-  11. Session close if outcome set
+  11. Session close if outcome set → finalize_session_close() (conformance + quiet-signal)
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from typing import Any
 from ola.agents.extractor import extract_signals
 from ola.agents.memory_manager import decide_operations
 from ola.agents.responder import generate_response, generate_response_from_bundle, stream_response
-from ola.conformance.router import route as conformance_route
 from ola.context_assembler import assemble
 from ola.domain.events import OperatorInteraction
 from ola.domain.memory import MemoryOperation, OperatorProfile
@@ -35,12 +34,13 @@ from ola.memory.store import (
     append_event,
     append_operation,
     append_signal,
-    close_session,
     get_or_create_session,
     get_profile,
+    get_session,
 )
 from ola.personalization.render import derive_directive, render_profile
 from ola.personalization.validation_gate import decide as validation_gate_decide
+from ola.sessions import close_if_timed_out, finalize_session_close
 
 
 async def process_interaction(
@@ -53,14 +53,21 @@ async def process_interaction(
     """
     kwargs: dict[str, str] = {"db_path": db_path} if db_path else {}  # type: ignore[assignment]
 
-    # 1. Session
+    # 1. Session — close out any session the operator has gone quiet on, then continue/open one.
+    await close_if_timed_out(interaction.operator_id, db_path=db_path)
     session_id = get_or_create_session(
         interaction.operator_id,
         trigger_alarm_code=interaction.alarm_code,
         machine_id=interaction.machine_id,
         **kwargs,
     )
-    interaction = interaction.model_copy(update={"session_id": session_id, "role": "operator"})
+    session_row = get_session(session_id, **kwargs)
+    update: dict[str, Any] = {"session_id": session_id, "role": "operator"}
+    if interaction.alarm_code is None and session_row and session_row.get("trigger_alarm_code"):
+        update["alarm_code"] = session_row["trigger_alarm_code"]
+    if interaction.machine_id is None and session_row and session_row.get("machine_id"):
+        update["machine_id"] = session_row["machine_id"]
+    interaction = interaction.model_copy(update=update)
 
     # 2. Append operator event
     append_event(interaction, **kwargs)
@@ -99,8 +106,8 @@ async def process_interaction(
     profile_after = get_profile(interaction.operator_id, **kwargs)
     project_profile(profile_after, profile_before)
 
-    # 6. Conformance Router
-    conformance_route(interaction, db_path=db_path)
+    # 6. Conformance Router — runs at session close (step 10), keyed to the
+    # session's trigger alarm, not every turn. See docs/sessions.md §6.
 
     # 7. Context Assembler
     vg_directive = validation_gate_decide(profile_after, ops, interaction.event_type)
@@ -121,12 +128,14 @@ async def process_interaction(
     )
     append_event(assistant_event, **kwargs)
 
-    # 10. Session close
-    if interaction.outcome in ("resolved_independently", "escalated", "unresolved"):
-        status = "resolved" if interaction.outcome == "resolved_independently" else (
-            "escalated" if interaction.outcome == "escalated" else "resolved"
+    # 10. Session close (provisional outcome — verified later by the Outcome Resolver)
+    if interaction.outcome in ("resolved_independently", "escalated", "unresolved", "abandoned"):
+        await finalize_session_close(
+            session_id, interaction.operator_id,
+            closing_event_id=interaction.id,
+            provisional_outcome=interaction.outcome,
+            db_path=db_path,
         )
-        close_session(session_id, status, **kwargs)
 
     return signals, ops, profile_after, reply
 
@@ -176,7 +185,8 @@ async def stream_interaction(
 
     profile_after = get_profile(interaction.operator_id, **kwargs)
     project_profile(profile_after, profile_before)
-    conformance_route(interaction, db_path=db_path)
+    # Conformance routing now runs at session close (process_interaction step 10),
+    # not here — this legacy SSE path has no close step.
 
     profile_block = render_profile(profile_after)
     directive = derive_directive(profile_after, situation=interaction.content)

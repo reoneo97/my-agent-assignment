@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     trigger_alarm_code  TEXT,
     machine_id          TEXT,
     status              TEXT NOT NULL DEFAULT 'open'
-                            CHECK (status IN ('open', 'resolved', 'escalated'))
+                            CHECK (status IN ('open', 'resolved', 'escalated', 'abandoned'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_operator ON sessions (operator_id);
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS events (
     id                  TEXT PRIMARY KEY,
     operator_id         TEXT NOT NULL,
     session_id          TEXT NOT NULL REFERENCES sessions(id),
-    role                TEXT NOT NULL CHECK (role IN ('operator', 'assistant')),
+    role                TEXT NOT NULL CHECK (role IN ('operator', 'assistant', 'system')),
     timestamp           TEXT NOT NULL,
     shift               TEXT CHECK (shift IN ('day', 'night')),
     machine_id          TEXT,
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS events (
     requested_modality  TEXT,
     content             TEXT NOT NULL,      -- raw message text
     outcome             TEXT CHECK (outcome IN (
-                            'resolved_independently', 'escalated', 'unresolved'
+                            'resolved_independently', 'escalated', 'unresolved', 'abandoned'
                         ))
 );
 

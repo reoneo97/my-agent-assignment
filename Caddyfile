@@ -1,0 +1,7 @@
+{$DOMAIN} {
+	reverse_proxy app:8000
+}
+
+mlflow.{$DOMAIN} {
+	reverse_proxy mlflow:5000
+}

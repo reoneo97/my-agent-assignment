@@ -1,5 +1,6 @@
 import type {
   InteractionResponse,
+  MockAlarmResponse,
   Operator,
   Profile,
   ShiftEndResponse,
@@ -31,6 +32,17 @@ export function sendUserMessage(operatorId: string, message: string): Promise<In
 
 export function sendSimulated(operatorId: string): Promise<InteractionResponse> {
   return post("/api/interaction", { operator_id: operatorId, source: "simulated" });
+}
+
+export function mockAlarm(operatorId: string): Promise<MockAlarmResponse> {
+  return post("/api/alarm/mock", { operator_id: operatorId });
+}
+
+export function closeSession(
+  operatorId: string,
+  outcome: "resolved_independently" | "escalated",
+): Promise<InteractionResponse> {
+  return post("/api/interaction", { operator_id: operatorId, source: "user", outcome });
 }
 
 export function endShift(operatorId: string, shift = "day"): Promise<ShiftEndResponse> {

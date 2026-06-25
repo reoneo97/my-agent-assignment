@@ -79,9 +79,24 @@ export interface Operator {
 
 export interface Message {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   text: string;
   signals?: Signal[];
   ops?: MemoryOp[];
   loading?: boolean;
+}
+
+export interface Alarm {
+  code: string | null;
+  machine_id: string | null;
+  complexity: string | null;
+  severity: string | null;
+  expected_disposition: string | null;
+}
+
+export interface MockAlarmResponse {
+  session_id: string;
+  alarm: Alarm;
+  system_message: string;
+  proactive_reply: string | null;
 }

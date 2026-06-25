@@ -6,8 +6,12 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.db
-data/*.db
+*.db-shm
+*.db-wal
+mlruns/
 ui/node_modules/
 ui/dist/
 .pytest_cache/
 docs/
+.claude/
+.DS_Store

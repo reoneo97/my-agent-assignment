@@ -19,5 +19,5 @@ docker compose up -d
 
 echo "── Done ──────────────────────────────"
 echo "  App:    http://localhost:8000"
-echo "  MLflow: http://localhost:5000"
+echo "  MLflow: http://localhost:5050"
 echo "  Neo4j:  http://localhost:7474"

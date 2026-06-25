@@ -10,6 +10,8 @@ import {
   fetchOperators,
   fetchSynopsis,
   resetOperator,
+  mockAlarm,
+  closeSession,
 } from "./api";
 import type {
   Message,
@@ -17,6 +19,7 @@ import type {
   Synopsis,
   Operator,
   ShiftEndResponse,
+  Alarm,
 } from "./types";
 
 export default function App() {
@@ -29,6 +32,8 @@ export default function App() {
   const [shiftBusy, setShiftBusy] = useState(false);
   const [shiftDiff, setShiftDiff] = useState<ShiftEndResponse | null>(null);
   const [resetBusy, setResetBusy] = useState(false);
+  const [activeAlarm, setActiveAlarm] = useState<Alarm | null>(null);
+  const [alarmBusy, setAlarmBusy] = useState(false);
 
   useEffect(() => {
     fetchOperators().then(({ operators: ops }) => setOperators(ops)).catch(() => {});
@@ -86,6 +91,42 @@ export default function App() {
     }
   }, [busy, operatorId, handleInteractionResponse]);
 
+  const handleMockAlarm = useCallback(async () => {
+    if (alarmBusy || busy) return;
+    setAlarmBusy(true);
+    try {
+      const res = await mockAlarm(operatorId);
+      setActiveAlarm(res.alarm);
+      const sysMsg: Message = { id: crypto.randomUUID(), role: "system", text: res.system_message };
+      setMessages((prev) => [...prev, sysMsg]);
+      if (res.proactive_reply) {
+        const asstMsg: Message = { id: crypto.randomUUID(), role: "assistant", text: res.proactive_reply };
+        setMessages((prev) => [...prev, asstMsg]);
+      }
+    } finally {
+      setAlarmBusy(false);
+    }
+  }, [alarmBusy, busy, operatorId]);
+
+  const handleCloseSession = useCallback(async (outcome: "resolved_independently" | "escalated") => {
+    if (busy) return;
+    setBusy(true);
+    const placeholder: Message = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
+    setMessages((prev) => [...prev, placeholder]);
+    try {
+      const res = await closeSession(operatorId, outcome);
+      setMessages((prev) => prev.filter((m) => m.id !== placeholder.id));
+      handleInteractionResponse(res);
+      setActiveAlarm(null);
+    } catch (e) {
+      setMessages((prev) =>
+        prev.map((m) => m.id === placeholder.id ? { ...m, text: `[Error: ${e}]`, loading: false } : m)
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, operatorId, handleInteractionResponse]);
+
   const handleEndShift = useCallback(async () => {
     if (shiftBusy) return;
     setShiftBusy(true);
@@ -107,6 +148,7 @@ export default function App() {
       setMessages([]);
       setProfileItems([]);
       setSynopsis(null);
+      setActiveAlarm(null);
     } finally {
       setResetBusy(false);
     }
@@ -117,6 +159,7 @@ export default function App() {
     setMessages([]);
     setProfileItems([]);
     setSynopsis(null);
+    setActiveAlarm(null);
   };
 
   return (
@@ -135,7 +178,16 @@ export default function App() {
           ))}
         </select>
 
+        {activeAlarm && (
+          <span style={s.alarmBadge}>
+            Active: {activeAlarm.code} ({activeAlarm.expected_disposition ?? "?"})
+          </span>
+        )}
+
         <div style={s.controls}>
+          <button style={s.alarmBtn} onClick={handleMockAlarm} disabled={alarmBusy || busy}>
+            {alarmBusy ? "Triggering…" : "Mock Alarm"}
+          </button>
           <button style={s.resetBtn} onClick={handleReset} disabled={resetBusy}>
             {resetBusy ? "Resetting…" : "Reset"}
           </button>
@@ -151,6 +203,8 @@ export default function App() {
           messages={messages}
           onSendUser={handleSendUser}
           onSendSimulated={handleSendSimulated}
+          onCloseSession={handleCloseSession}
+          activeAlarm={!!activeAlarm}
           busy={busy}
         />
 
@@ -174,6 +228,8 @@ const s: Record<string, React.CSSProperties> = {
   title: { fontWeight: 600, fontSize: 15, letterSpacing: "0.01em", marginRight: 4 },
   picker: { background: "#1a2030", border: "1px solid #1e2535", borderRadius: 6, color: "#e2e8f0", fontSize: 13, padding: "5px 10px", cursor: "pointer" },
   controls: { marginLeft: "auto", display: "flex", gap: 8 },
+  alarmBadge: { fontSize: 11, fontWeight: 600, color: "#fbbf24", background: "#3a2e0f", border: "1px solid #78521b", borderRadius: 6, padding: "4px 10px", marginLeft: 12 },
+  alarmBtn: { padding: "6px 12px", fontSize: 12, fontWeight: 600, border: "1px solid #f59e0b", borderRadius: 6, background: "transparent", color: "#fbbf24", cursor: "pointer" },
   resetBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #334155", borderRadius: 6, background: "transparent", color: "#64748b", cursor: "pointer" },
   endShiftBtn: { padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid #2563eb", borderRadius: 6, background: "transparent", color: "#60a5fa", cursor: "pointer" },
   body: { display: "flex", flex: 1, overflow: "hidden" },
