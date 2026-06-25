@@ -89,7 +89,7 @@ graph/
 scripts/
   init_sqlite.sql     # full v2 SQL schema
   demo.py             # CLI demo driver
-  setup-droplet.sh    # one-time Digital Ocean setup
+  deploy.sh           # droplet redeploy (git pull, rebuild, wipe SQLite, up -d)
 eval/                 # evaluation harness (Stage 3, stub)
 tests/
   test_store.py       # fold + session + high_weight + reset (pure, no network)
