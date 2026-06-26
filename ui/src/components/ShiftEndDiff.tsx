@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import type { ShiftEndResponse } from "../types";
+import { tierBadge } from "../theme";
 
 interface Props {
   result: ShiftEndResponse;
@@ -6,12 +8,30 @@ interface Props {
 }
 
 export default function ShiftEndDiff({ result, onDismiss }: Props) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  // Close on Escape and move focus to the dismiss control when the modal opens.
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
   return (
     <div style={s.overlay} onClick={onDismiss}>
-      <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+      <div
+        style={s.modal}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shift-diff-title"
+      >
         <div style={s.header}>
-          <span style={s.title}>End of Shift — Consolidation</span>
-          <button style={s.close} onClick={onDismiss}>✕</button>
+          <span id="shift-diff-title" style={s.title}>End of Shift — Consolidation</span>
+          <button ref={closeRef} style={s.close} onClick={onDismiss} aria-label="Close consolidation summary">✕</button>
         </div>
 
         {result.no_significant_updates ? (
@@ -79,9 +99,8 @@ export default function ShiftEndDiff({ result, onDismiss }: Props) {
 }
 
 function tierColor(status: string): React.CSSProperties {
-  if (status === "established" || status === "confirmed")
-    return { background: "#1e3a5f", color: "#60a5fa" };
-  return { background: "#1e293b", color: "#94a3b8" };
+  const { bg, color } = tierBadge(status);
+  return { background: bg, color };
 }
 
 const s: Record<string, React.CSSProperties> = {
