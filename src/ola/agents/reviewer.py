@@ -53,6 +53,7 @@ class ConformanceResult(BaseModel):
 _consolidate_agent: Agent[None, ConsolidateOutput] = Agent(
     _model,
     output_type=ConsolidateOutput,
+    output_retries=3,
     system_prompt="""\
 You are reviewing a shift's operator interactions to update a behavioural profile.
 Given recent operator events and the current profile, propose memory operations
@@ -71,6 +72,7 @@ Rules:
 _conformance_agent: Agent[None, ConformanceResult] = Agent(
     _model,
     output_type=ConformanceResult,
+    output_retries=3,
     system_prompt="""\
 You are classifying whether an operator followed the standard procedure (SOP)
 for an alarm. Compare what the operator did (observed action) against the

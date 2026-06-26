@@ -9,6 +9,7 @@ interface Props {
   onSendSimulated: () => void;
   onCloseSession: (outcome: "resolved_independently" | "escalated") => void;
   activeAlarm: boolean;
+  activeAlarmCode?: string;
   busy: boolean;
 }
 
@@ -61,7 +62,7 @@ function LearnedAnnotation({ signals, ops }: { signals?: Signal[]; ops?: MemoryO
   );
 }
 
-export default function ConversationPanel({ messages, onSendUser, onSendSimulated, onCloseSession, activeAlarm, busy }: Props) {
+export default function ConversationPanel({ messages, onSendUser, onSendSimulated, onCloseSession, activeAlarm, activeAlarmCode, busy }: Props) {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -78,9 +79,18 @@ export default function ConversationPanel({ messages, onSendUser, onSendSimulate
 
   return (
     <div style={s.panel}>
-      <div style={s.messages}>
+      {activeAlarm && activeAlarmCode && (
+        <div style={s.statusBar}>
+          <span style={s.statusDot} />
+          Currently Resolving — {activeAlarmCode}
+        </div>
+      )}
+      <div style={s.messages} role="log" aria-live="polite" aria-label="Conversation">
         {messages.length === 0 && (
-          <p style={s.empty}>Type a message or click "Next Interaction" to begin.</p>
+          <div style={s.empty}>
+            <p style={s.emptyTitle}>No messages yet</p>
+            <p style={s.emptySub}>Type an operator message below, or click “Next Interaction” to simulate one.</p>
+          </div>
         )}
         {messages.map((msg) => msg.role === "system" ? (
           <div key={msg.id} style={s.systemBanner}>⚠ {msg.text}</div>
@@ -110,41 +120,51 @@ export default function ConversationPanel({ messages, onSendUser, onSendSimulate
         <input
           style={s.input}
           value={input}
+          aria-label="Operator message"
           placeholder="Type an operator message…"
           disabled={busy}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && submit()}
         />
-        <button style={s.sendBtn} onClick={submit} disabled={busy || !input.trim()}>
+        <button style={{...s.sendBtn, ...(activeAlarm ? s.dimmed : {})}} onClick={submit} disabled={busy || !input.trim()}>
           Send
         </button>
-        <button style={s.simBtn} onClick={onSendSimulated} disabled={busy}>
+        <button style={{...s.simBtn, ...(activeAlarm ? s.dimmed : {})}} onClick={onSendSimulated} disabled={busy}>
           Next Interaction
         </button>
-        <button
-          style={s.resolveBtn}
-          onClick={() => onCloseSession("resolved_independently")}
-          disabled={busy || !activeAlarm}
-        >
-          Mark Resolved
-        </button>
-        <button
-          style={s.escalateBtn}
-          onClick={() => onCloseSession("escalated")}
-          disabled={busy || !activeAlarm}
-        >
-          Escalate
-        </button>
+        {activeAlarm && (
+          <>
+            <button
+              style={s.resolveBtn}
+              onClick={() => onCloseSession("resolved_independently")}
+              disabled={busy}
+            >
+              Mark Resolved
+            </button>
+            <button
+              style={s.escalateBtn}
+              onClick={() => onCloseSession("escalated")}
+              disabled={busy}
+            >
+              Escalate
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
-  panel: { display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" },
-  messages: { flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 },
-  empty: { color: "#475569", fontSize: 13, textAlign: "center", marginTop: 60 },
-  bubble: { maxWidth: 760, borderRadius: 10, padding: "12px 16px" },
+  panel: { display: "flex", flexDirection: "column", flex: 1, minWidth: 0, overflow: "hidden" },
+  statusBar: { display: "flex", alignItems: "center", gap: 8, padding: "8px 20px", background: "#1c2a1c", borderBottom: "1px solid #2a4a2a", fontSize: 12, fontWeight: 600, color: "#4ade80", flexShrink: 0 },
+  statusDot: { width: 8, height: 8, borderRadius: "50%", background: "#4ade80", flexShrink: 0, boxShadow: "0 0 6px #4ade80", animation: "blink 1.4s ease-in-out infinite" },
+  messages: { flex: 1, minHeight: 0, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: 14 },
+  dimmed: { opacity: 0.4 },
+  empty: { margin: "auto", textAlign: "center", maxWidth: 320 },
+  emptyTitle: { color: "#64748b", fontSize: 14, fontWeight: 600, margin: "0 0 6px" },
+  emptySub: { color: "#475569", fontSize: 12.5, lineHeight: 1.6, margin: 0 },
+  bubble: { maxWidth: 760, borderRadius: 10, padding: "12px 16px", animation: "fadeInUp 0.22s ease both" },
   userBubble: { alignSelf: "flex-end", background: "#1e3a5f", borderBottomRightRadius: 2 },
   asstBubble: { alignSelf: "flex-start", background: "#1a2030", borderBottomLeftRadius: 2, width: "100%" },
   roleLabel: { fontSize: 11, fontWeight: 600, color: "#64748b", letterSpacing: "0.06em", textTransform: "uppercase" as const, display: "block", marginBottom: 6 },

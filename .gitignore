@@ -11,6 +11,7 @@ __pycache__/
 mlruns/
 ui/node_modules/
 ui/dist/
+vite.config.ts.timestamp-*.mjs
 .pytest_cache/
 docs/
 .claude/

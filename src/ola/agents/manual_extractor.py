@@ -45,6 +45,7 @@ class KGDraft(BaseModel):
 _agent: Agent[None, KGDraft] = Agent(
     make_strong_model(),
     output_type=KGDraft,
+    output_retries=3,
     system_prompt="""\
 You are extracting structured knowledge from a manufacturing procedure manual.
 Given the manual text, produce:

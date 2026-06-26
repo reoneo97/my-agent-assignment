@@ -68,8 +68,8 @@ export default function ProfilePanel({ items }: Props) {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  panel: { width: 260, minWidth: 220, borderRight: "1px solid #1e2535", background: "#131820", display: "flex", flexDirection: "column", overflowY: "auto" },
-  heading: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 14px 10px", fontSize: 11, fontWeight: 700, color: "#64748b", borderBottom: "1px solid #1e2535", letterSpacing: "0.08em", textTransform: "uppercase" as const },
+  panel: { width: "100%", background: "#131820", display: "flex", flexDirection: "column" },
+  heading: { position: "sticky", top: 0, zIndex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 14px 10px", fontSize: 11, fontWeight: 700, color: "#64748b", background: "#131820", borderBottom: "1px solid #1e2535", letterSpacing: "0.08em", textTransform: "uppercase" as const },
   count: { fontWeight: 400, color: "#334155" },
   empty: { fontSize: 12, color: "#475569", padding: "16px 14px", margin: 0 },
   group: { borderBottom: "1px solid #1a2030", paddingBottom: 4 },

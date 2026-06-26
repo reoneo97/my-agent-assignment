@@ -1,14 +1,80 @@
+:root {
+  /* Surfaces */
+  --bg: #0f1117;
+  --surface: #131820;
+  --surface-raised: #1a2030;
+  --border: #1e2535;
+  --border-strong: #334155;
+  /* Text */
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+  --text-dim: #475569;
+  /* Accents */
+  --accent: #2563eb;
+  --accent-text: #60a5fa;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+
+  color-scheme: dark;
+}
+
 *, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; padding: 0; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
 
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0; }
 }
 
-::-webkit-scrollbar { width: 6px; }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Global control affordances ──────────────────────────────────
+   These work regardless of per-component inline styles: `filter` and
+   `outline` are never set inline, so hover / active / focus states layer
+   cleanly on top of the existing button backgrounds. */
+button {
+  font-family: inherit;
+  transition: filter 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+button:not(:disabled) { cursor: pointer; }
+button:not(:disabled):hover { filter: brightness(1.15); }
+button:not(:disabled):active { filter: brightness(0.92); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+input, select, textarea { font-family: inherit; }
+input, select { transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+
+:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+input:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: var(--accent-text) !important;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #1e2535; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #1e2535; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #2a3346; }
 
 /* ── Markdown body rendered inside assistant bubbles ── */
 .md-body {

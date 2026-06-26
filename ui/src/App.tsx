@@ -140,6 +140,11 @@ export default function App() {
     }
   }, [shiftBusy, operatorId, synopsis]);
 
+  const handleRestartConversation = useCallback(() => {
+    setMessages([]);
+    setActiveAlarm(null);
+  }, []);
+
   const handleReset = useCallback(async () => {
     if (resetBusy || !confirm(`Reset all learned state for ${operatorId}?`)) return;
     setResetBusy(true);
@@ -165,12 +170,16 @@ export default function App() {
   return (
     <div style={s.root}>
       <header style={s.header}>
+        <span style={s.brandDot} aria-hidden="true" />
         <span style={s.title}>Operator Learning Assistant</span>
 
+        <label style={s.srOnly} htmlFor="operator-picker">Select operator</label>
         <select
+          id="operator-picker"
           style={s.picker}
           value={operatorId}
           onChange={(e) => handleOperatorChange(e.target.value)}
+          title="Switch operator"
         >
           {operators.length === 0 && <option value={operatorId}>{operatorId}</option>}
           {operators.map((op) => (
@@ -179,19 +188,27 @@ export default function App() {
         </select>
 
         {activeAlarm && (
-          <span style={s.alarmBadge}>
-            Active: {activeAlarm.code} ({activeAlarm.expected_disposition ?? "?"})
+          <span style={s.alarmBadge} title="Active alarm being resolved">
+            <span style={s.alarmBadgeDot} aria-hidden="true" />
+            {activeAlarm.code} ({activeAlarm.expected_disposition ?? "?"})
           </span>
         )}
 
         <div style={s.controls}>
-          <button style={s.alarmBtn} onClick={handleMockAlarm} disabled={alarmBusy || busy}>
+          <button style={s.alarmBtn} onClick={handleMockAlarm} disabled={alarmBusy || busy}
+            title="Inject a simulated alarm to start a resolution session">
             {alarmBusy ? "Triggering…" : "Mock Alarm"}
           </button>
-          <button style={s.resetBtn} onClick={handleReset} disabled={resetBusy}>
+          <button style={s.restartBtn} onClick={handleRestartConversation} disabled={busy}
+            title="Clear the conversation (keeps learned profile)">
+            Restart
+          </button>
+          <button style={s.resetBtn} onClick={handleReset} disabled={resetBusy}
+            title="Erase all learned state for this operator">
             {resetBusy ? "Resetting…" : "Reset"}
           </button>
-          <button style={s.endShiftBtn} onClick={handleEndShift} disabled={shiftBusy}>
+          <button style={s.endShiftBtn} onClick={handleEndShift} disabled={shiftBusy}
+            title="Run slow-path consolidation and regenerate the synopsis">
             {shiftBusy ? "Consolidating…" : "End Shift"}
           </button>
         </div>
@@ -205,6 +222,7 @@ export default function App() {
           onSendSimulated={handleSendSimulated}
           onCloseSession={handleCloseSession}
           activeAlarm={!!activeAlarm}
+          activeAlarmCode={activeAlarm?.code ?? undefined}
           busy={busy}
         />
 
@@ -223,15 +241,19 @@ export default function App() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  root: { display: "flex", flexDirection: "column", height: "100vh", fontFamily: "'Inter', system-ui, sans-serif", background: "#0f1117", color: "#e2e8f0" },
-  header: { display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid #1e2535", background: "#131820", flexShrink: 0 },
+  root: { display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", fontFamily: "'Inter', system-ui, sans-serif", background: "#0f1117", color: "#e2e8f0" },
+  header: { display: "flex", alignItems: "center", gap: 12, rowGap: 8, flexWrap: "wrap", padding: "10px 20px", borderBottom: "1px solid #1e2535", background: "#131820", flexShrink: 0 },
+  brandDot: { width: 9, height: 9, borderRadius: "50%", background: "#60a5fa", boxShadow: "0 0 8px rgba(96,165,250,0.7)", flexShrink: 0 },
   title: { fontWeight: 600, fontSize: 15, letterSpacing: "0.01em", marginRight: 4 },
   picker: { background: "#1a2030", border: "1px solid #1e2535", borderRadius: 6, color: "#e2e8f0", fontSize: 13, padding: "5px 10px", cursor: "pointer" },
-  controls: { marginLeft: "auto", display: "flex", gap: 8 },
-  alarmBadge: { fontSize: 11, fontWeight: 600, color: "#fbbf24", background: "#3a2e0f", border: "1px solid #78521b", borderRadius: 6, padding: "4px 10px", marginLeft: 12 },
-  alarmBtn: { padding: "6px 12px", fontSize: 12, fontWeight: 600, border: "1px solid #f59e0b", borderRadius: 6, background: "transparent", color: "#fbbf24", cursor: "pointer" },
-  resetBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #334155", borderRadius: 6, background: "transparent", color: "#64748b", cursor: "pointer" },
-  endShiftBtn: { padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid #2563eb", borderRadius: 6, background: "transparent", color: "#60a5fa", cursor: "pointer" },
-  body: { display: "flex", flex: 1, overflow: "hidden" },
+  controls: { marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" },
+  alarmBadge: { display: "inline-flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#fbbf24", background: "#3a2e0f", border: "1px solid #78521b", borderRadius: 6, padding: "4px 10px" },
+  alarmBadgeDot: { width: 6, height: 6, borderRadius: "50%", background: "#fbbf24", animation: "blink 1.4s ease-in-out infinite" },
+  alarmBtn: { padding: "6px 12px", fontSize: 12, fontWeight: 600, border: "1px solid #f59e0b", borderRadius: 6, background: "transparent", color: "#fbbf24" },
+  restartBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #334155", borderRadius: 6, background: "transparent", color: "#94a3b8" },
+  resetBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #334155", borderRadius: 6, background: "transparent", color: "#64748b" },
+  endShiftBtn: { padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid #2563eb", borderRadius: 6, background: "transparent", color: "#60a5fa" },
+  body: { display: "flex", flex: 1, minHeight: 0, overflow: "hidden" },
   rightSidebar: { display: "flex", flexDirection: "column", width: 260, minWidth: 220, borderLeft: "1px solid #1e2535", overflowY: "auto" },
+  srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 },
 };
