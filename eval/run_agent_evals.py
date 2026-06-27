@@ -236,7 +236,7 @@ def _label_run(run_id: str, name: str, tags: dict) -> None:
         client.set_tag(run_id, k, v)
 
 
-def run_extractor_eval(cases: list[dict], set_name: str):
+def run_extractor_eval(cases: list[dict], set_name: str) -> float:
     dataset = [extractor_case_to_row(c) for c in cases]
     results = mlflow.genai.evaluate(
         data=dataset,
@@ -244,12 +244,10 @@ def run_extractor_eval(cases: list[dict], set_name: str):
         scorers=[extractor_correctness],
     )
     _label_run(results.run_id, f"extractor-eval-{set_name}", {"agent": "extractor", "set": set_name})
-    accuracy = results.metrics.get("extractor_correctness/mean", 0.0)
-    print(f"  {set_name}: accuracy={accuracy:.0%}  (see MLflow run for per-case rationale)\n")
-    return accuracy
+    return results.metrics.get("extractor_correctness/mean", 0.0)
 
 
-def run_memory_manager_eval(cases: list[dict], set_name: str):
+def run_memory_manager_eval(cases: list[dict], set_name: str) -> float:
     dataset = [memory_manager_case_to_row(c) for c in cases]
     results = mlflow.genai.evaluate(
         data=dataset,
@@ -257,32 +255,26 @@ def run_memory_manager_eval(cases: list[dict], set_name: str):
         scorers=[memory_manager_correctness],
     )
     _label_run(results.run_id, f"memory-manager-eval-{set_name}", {"agent": "memory_manager", "set": set_name})
-    accuracy = results.metrics.get("memory_manager_correctness/mean", 0.0)
-    print(f"  {set_name}: accuracy={accuracy:.0%}  (see MLflow run for per-case rationale)\n")
-    return accuracy
+    return results.metrics.get("memory_manager_correctness/mean", 0.0)
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
 def main():
-    print("=== Extractor ===")
-    print("--- dev ---")
-    ext_dev = run_extractor_eval(EXTRACTOR_DEV, "dev")
-    print("--- heldout ---")
-    ext_held = run_extractor_eval(EXTRACTOR_HELDOUT, "heldout")
-    print("--- zh ---")
-    ext_zh = run_extractor_eval(EXTRACTOR_ZH, "zh")
-    print(f"  dev={ext_dev:.0%}  heldout={ext_held:.0%}  zh={ext_zh:.0%}\n")
+    ext_scores = [
+        run_extractor_eval(EXTRACTOR_DEV, "dev"),
+        run_extractor_eval(EXTRACTOR_HELDOUT, "heldout"),
+        run_extractor_eval(EXTRACTOR_ZH, "zh"),
+    ]
+    print(f"extractor    mean_correctness={sum(ext_scores) / len(ext_scores):.0%}")
 
-    print("=== Memory Manager ===")
-    print("--- dev ---")
-    mm_dev = run_memory_manager_eval(MEMORY_MANAGER_DEV, "dev")
-    print("--- heldout ---")
-    mm_held = run_memory_manager_eval(MEMORY_MANAGER_HELDOUT, "heldout")
-    print("--- zh ---")
-    mm_zh = run_memory_manager_eval(MEMORY_MANAGER_ZH, "zh")
-    print(f"  dev={mm_dev:.0%}  heldout={mm_held:.0%}  zh={mm_zh:.0%}")
+    mm_scores = [
+        run_memory_manager_eval(MEMORY_MANAGER_DEV, "dev"),
+        run_memory_manager_eval(MEMORY_MANAGER_HELDOUT, "heldout"),
+        run_memory_manager_eval(MEMORY_MANAGER_ZH, "zh"),
+    ]
+    print(f"memory_manager  mean_correctness={sum(mm_scores) / len(mm_scores):.0%}")
 
 
 if __name__ == "__main__":
