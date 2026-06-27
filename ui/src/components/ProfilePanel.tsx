@@ -1,14 +1,9 @@
-import type { ProfileItem, TierStatus } from "../types";
+import type { ProfileItem } from "../types";
+import { tierBadge } from "../theme";
 
 interface Props {
   items: ProfileItem[];
 }
-
-const TIER: Record<TierStatus, { bg: string; color: string }> = {
-  tentative:   { bg: "#1e293b", color: "#94a3b8" },
-  established: { bg: "#1e3a5f", color: "#60a5fa" },
-  confirmed:   { bg: "#14532d", color: "#4ade80" },
-};
 
 const CAT_LABELS: Record<string, string> = {
   INSTRUCTION_MODALITY: "Modality",
@@ -44,7 +39,7 @@ export default function ProfilePanel({ items }: Props) {
           <div key={cat} style={s.group}>
             <p style={s.catLabel}>{CAT_LABELS[cat] ?? cat}</p>
             {catItems.map((item) => {
-              const tier = TIER[item.status] ?? TIER.tentative;
+              const tier = tierBadge(item.status);
               return (
                 <div key={item.id} style={s.item}>
                   <div style={s.itemTop}>

@@ -71,6 +71,29 @@ input:focus-visible, select:focus-visible {
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
 }
 
+/* ── Responsive layout ───────────────────────────────────────────
+   The app uses inline styles, so the !important overrides here are
+   intentional — they let the stacked mobile layout win over the inline
+   row layout below ~760px without rewriting the component styles. */
+@media (max-width: 760px) {
+  .app-body { flex-direction: column !important; }
+  .app-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-height: 42vh;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #1e2535; border-radius: 4px; }

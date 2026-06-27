@@ -214,7 +214,7 @@ export default function App() {
         </div>
       </header>
 
-      <div style={s.body}>
+      <div className="app-body" style={s.body}>
         {/* Left: conversation */}
         <ConversationPanel
           messages={messages}
@@ -227,7 +227,7 @@ export default function App() {
         />
 
         {/* Right: profile + synopsis stacked */}
-        <div style={s.rightSidebar}>
+        <div className="app-sidebar" style={s.rightSidebar}>
           <ProfilePanel items={profileItems} />
           <SynopsisPanel synopsis={synopsis} />
         </div>
@@ -251,8 +251,8 @@ const s: Record<string, React.CSSProperties> = {
   alarmBadgeDot: { width: 6, height: 6, borderRadius: "50%", background: "#fbbf24", animation: "blink 1.4s ease-in-out infinite" },
   alarmBtn: { padding: "6px 12px", fontSize: 12, fontWeight: 600, border: "1px solid #f59e0b", borderRadius: 6, background: "transparent", color: "#fbbf24" },
   restartBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #334155", borderRadius: 6, background: "transparent", color: "#94a3b8" },
-  resetBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #334155", borderRadius: 6, background: "transparent", color: "#64748b" },
-  endShiftBtn: { padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid #2563eb", borderRadius: 6, background: "transparent", color: "#60a5fa" },
+  resetBtn: { padding: "6px 12px", fontSize: 12, border: "1px solid #5a2b2b", borderRadius: 6, background: "transparent", color: "#b78a8a" },
+  endShiftBtn: { padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid #2563eb", borderRadius: 6, background: "#2563eb", color: "#fff" },
   body: { display: "flex", flex: 1, minHeight: 0, overflow: "hidden" },
   rightSidebar: { display: "flex", flexDirection: "column", width: 260, minWidth: 220, borderLeft: "1px solid #1e2535", overflowY: "auto" },
   srOnly: { position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 },
