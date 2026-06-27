@@ -27,6 +27,7 @@ class ProfileOut(BaseModel):
 
 class InteractionRequest(BaseModel):
     operator_id: str = "op-demo-01"
+    session_id: str | None = None  # held by client after mock alarm; route falls back to get_or_create if absent
     source: Literal["user", "simulated"] = "user"
     message: str | None = None   # required when source="user" and outcome is not set
     outcome: Literal["resolved_independently", "escalated"] | None = None  # explicit Resolve/Escalate action

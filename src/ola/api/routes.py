@@ -24,9 +24,9 @@ from ola.api.schemas import (
     TraitMatch,
 )
 from ola.consolidation import run_consolidation
-from ola.memory.store import get_profile, get_synopsis, reset_operator
+from ola.memory.store import get_or_create_session, get_profile, get_synopsis, reset_operator
 from ola.pipeline import process_interaction
-from ola.sessions import open_alarm_session
+from ola.sessions import close_if_timed_out, open_alarm_session
 
 router = APIRouter()
 
@@ -78,7 +78,16 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
             content=content,
         )
 
-    signals, ops, profile, reply = await process_interaction(interaction_obj, db_path=_DB)
+    # Session lifecycle — resolved here, not inside pipeline
+    await close_if_timed_out(req.operator_id, db_path=_DB)
+    session_id = req.session_id or get_or_create_session(
+        req.operator_id,
+        trigger_alarm_code=getattr(interaction_obj, "alarm_code", None),
+        machine_id=getattr(interaction_obj, "machine_id", None),
+        db_path=_DB,
+    )
+
+    signals, ops, profile, reply = await process_interaction(interaction_obj, session_id=session_id, db_path=_DB)
 
     return InteractionResponse(
         interaction=InteractionOut(

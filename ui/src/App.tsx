@@ -34,6 +34,7 @@ export default function App() {
   const [resetBusy, setResetBusy] = useState(false);
   const [activeAlarm, setActiveAlarm] = useState<Alarm | null>(null);
   const [alarmBusy, setAlarmBusy] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchOperators().then(({ operators: ops }) => setOperators(ops)).catch(() => {});
@@ -59,7 +60,7 @@ export default function App() {
     const placeholder: Message = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
     setMessages((prev) => [...prev, userMsg, placeholder]);
     try {
-      const res = await sendUserMessage(operatorId, text);
+      const res = await sendUserMessage(operatorId, text, sessionId ?? undefined);
       setMessages((prev) => prev.filter((m) => m.id !== placeholder.id));
       handleInteractionResponse(res);
     } catch (e) {
@@ -77,7 +78,7 @@ export default function App() {
     const placeholder: Message = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
     setMessages((prev) => [...prev, placeholder]);
     try {
-      const res = await sendSimulated(operatorId);
+      const res = await sendSimulated(operatorId, sessionId ?? undefined);
       // Show simulated operator turn first, then assistant reply
       const simMsg: Message = { id: crypto.randomUUID(), role: "user", text: res.interaction.operator_message };
       setMessages((prev) => prev.filter((m) => m.id !== placeholder.id).concat(simMsg));
@@ -97,6 +98,7 @@ export default function App() {
     try {
       const res = await mockAlarm(operatorId);
       setActiveAlarm(res.alarm);
+      setSessionId(res.session_id);
       const sysMsg: Message = { id: crypto.randomUUID(), role: "system", text: res.system_message };
       setMessages((prev) => [...prev, sysMsg]);
       if (res.proactive_reply) {
@@ -114,10 +116,11 @@ export default function App() {
     const placeholder: Message = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
     setMessages((prev) => [...prev, placeholder]);
     try {
-      const res = await closeSession(operatorId, outcome);
+      const res = await closeSession(operatorId, outcome, sessionId ?? undefined);
       setMessages((prev) => prev.filter((m) => m.id !== placeholder.id));
       handleInteractionResponse(res);
       setActiveAlarm(null);
+      setSessionId(null);
     } catch (e) {
       setMessages((prev) =>
         prev.map((m) => m.id === placeholder.id ? { ...m, text: `[Error: ${e}]`, loading: false } : m)
@@ -143,6 +146,7 @@ export default function App() {
   const handleRestartConversation = useCallback(() => {
     setMessages([]);
     setActiveAlarm(null);
+    setSessionId(null);
   }, []);
 
   const handleReset = useCallback(async () => {
@@ -154,6 +158,7 @@ export default function App() {
       setProfileItems([]);
       setSynopsis(null);
       setActiveAlarm(null);
+      setSessionId(null);
     } finally {
       setResetBusy(false);
     }
@@ -165,6 +170,7 @@ export default function App() {
     setProfileItems([]);
     setSynopsis(null);
     setActiveAlarm(null);
+    setSessionId(null);
   };
 
   return (
