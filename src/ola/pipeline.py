@@ -21,6 +21,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from ola.telemetry import traced_interaction
+
 from ola.agents.extractor import extract_signals
 from ola.agents.memory_manager import decide_operations
 from ola.agents.responder import generate_response_from_bundle
@@ -40,6 +42,7 @@ from ola.personalization.validation_gate import decide as validation_gate_decide
 from ola.sessions import finalize_session_close
 
 
+@traced_interaction
 async def process_interaction(
     interaction: OperatorInteraction,
     session_id: str,
