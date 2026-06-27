@@ -25,6 +25,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 EXTRACTOR_DEV = [
+    # ── Clean / baseline cases ────────────────────────────────────────────
     {
         "id": "ext-d1",
         "tests": "modality request -> VISUAL signal",
@@ -65,9 +66,6 @@ EXTRACTOR_DEV = [
             "content": "Show me the steps as pictures.",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
-        # The extractor should emit an OBSERVATION (requested visual THIS time),
-        # not assert a stable preference. We can't easily diff prose, but we
-        # guard against it inventing a different unsupported category.
         "must_not": [("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
     },
     {
@@ -87,12 +85,158 @@ EXTRACTOR_DEV = [
             "event_type": "question", "alarm_code": None,
             "content": "What time does the next shift start?",
         },
-        "expect_signals": [],   # PASS if no behavioural signals emitted
+        "expect_signals": [],
         "must_not": [("INSTRUCTION_MODALITY", ""), ("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
+    },
+
+    # ── Negation ──────────────────────────────────────────────────────────
+    {
+        "id": "ext-d7",
+        "tests": "NEGATION: 'don't show me pictures' -> TEXT not VISUAL",
+        "event": {
+            "event_type": "question", "alarm_code": "PA-2201",
+            "content": "Don't show me pictures this time, just tell me the steps in words.",
+        },
+        "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "TEXT"}],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
+    },
+    {
+        "id": "ext-d8",
+        "tests": "NEGATION: 'stop escalating for me' -> implicit confidence signal",
+        "event": {
+            "event_type": "question", "alarm_code": "FL-1106",
+            "content": "You keep suggesting I call maintenance for these flow alarms. I can handle them myself, stop escalating for me.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "must_not": [("ESCALATION", "ESCALATED_FAST")],
+    },
+
+    # ── Multi-signal ──────────────────────────────────────────────────────
+    {
+        "id": "ext-d9",
+        "tests": "MULTI-SIGNAL: visual request + independent resolution in one message",
+        "event": {
+            "event_type": "alarm", "alarm_code": "PA-2201",
+            "content": "Pressure alarm again. Checked the diagram on the panel and vented V-4 myself, all clear now.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [
+            {"category": "INSTRUCTION_MODALITY", "value": "VISUAL"},
+            {"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"},
+        ],
+        "must_not": [],
+    },
+    {
+        "id": "ext-d10",
+        "tests": "MULTI-SIGNAL: escalation + explicit text preference",
+        "event": {
+            "event_type": "alarm", "alarm_code": "HY-0042",
+            "content": "I'm escalating this hydraulic fault now. By the way, when you send me instructions, just text is fine, I don't need diagrams.",
+            "outcome": "escalated",
+        },
+        "expect_signals": [
+            {"category": "ESCALATION", "value": "ESCALATED_FAST"},
+            {"category": "INSTRUCTION_MODALITY", "value": "TEXT"},
+        ],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
+    },
+
+    # ── False friends ─────────────────────────────────────────────────────
+    {
+        "id": "ext-d11",
+        "tests": "FALSE FRIEND: mentions 'escalate' but is asking about policy, not escalating",
+        "event": {
+            "event_type": "question", "alarm_code": None,
+            "content": "When should I escalate a hydraulic alarm? What's the policy?",
+        },
+        "expect_signals": [],
+        "must_not": [("ESCALATION", "")],
+    },
+    {
+        "id": "ext-d12",
+        "tests": "FALSE FRIEND: mentions 'picture' but is describing what they saw, not requesting modality",
+        "event": {
+            "event_type": "question", "alarm_code": "FL-1105",
+            "content": "I saw a picture of the sensor layout on the panel, but the readings still look wrong. What should I do?",
+        },
+        "expect_signals": [],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
+    },
+    {
+        "id": "ext-d13",
+        "tests": "FALSE FRIEND: 'I resolved it' but outcome is actually escalated (text-outcome mismatch)",
+        "event": {
+            "event_type": "alarm", "alarm_code": "HY-0042",
+            "content": "I think I resolved it, the press looks normal now.",
+            "outcome": "escalated",
+        },
+        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
+        "must_not": [("ISSUE_CONFIDENCE", "RESOLVED_INDEPENDENT")],
+    },
+
+    # ── Implicit modality ─────────────────────────────────────────────────
+    {
+        "id": "ext-d14",
+        "tests": "IMPLICIT: 'walk me through it step by step' -> no strong modality signal",
+        "event": {
+            "event_type": "question", "alarm_code": "RC-3301",
+            "content": "Can you walk me through the recipe reload step by step?",
+        },
+        "expect_signals": [],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL"), ("INSTRUCTION_MODALITY", "TEXT")],
+    },
+    {
+        "id": "ext-d15",
+        "tests": "IMPLICIT: 'send me a video' -> VIDEO not VISUAL",
+        "event": {
+            "event_type": "question", "alarm_code": "FL-1105",
+            "content": "Is there a video for the calibration? Send me that instead.",
+        },
+        "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VIDEO"}],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL"), ("INSTRUCTION_MODALITY", "TEXT")],
+    },
+
+    # ── Frustration / emotion ─────────────────────────────────────────────
+    {
+        "id": "ext-d16",
+        "tests": "FRUSTRATION: angry but self-resolving, not escalating",
+        "event": {
+            "event_type": "alarm", "alarm_code": "PA-2201",
+            "content": "This stupid pressure alarm again! I've already vented V-4 and reset it. Third time today.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "must_not": [("ESCALATION", ""), ("LEARNING_NEED", "")],
+    },
+    {
+        "id": "ext-d17",
+        "tests": "FRUSTRATION: expressing doubt but resolved independently (action over self-assessment)",
+        "event": {
+            "event_type": "question", "alarm_code": "FL-1105",
+            "content": "I'm not super confident with these sensor alarms honestly, but I think I got it this time.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "must_not": [],
+    },
+
+    # ── Shift / temporal ──────────────────────────────────────────────────
+    {
+        "id": "ext-d18",
+        "tests": "SHIFT: operator mentions tiredness / end of shift",
+        "event": {
+            "event_type": "question", "alarm_code": None,
+            "content": "It's been a long night shift, I'm pretty tired. Anything I should hand over?",
+            "shift": "night",
+        },
+        "expect_signals": [{"category": "SHIFT_PATTERN", "value": "END_OF_SHIFT_FATIGUE"}],
+        "must_not": [("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
     },
 ]
 
 EXTRACTOR_HELDOUT = [
+    # ── Clean / baseline ──────────────────────────────────────────────────
     {
         "id": "ext-h1",
         "tests": "modality request phrased differently -> VISUAL",
@@ -105,7 +249,7 @@ EXTRACTOR_HELDOUT = [
     },
     {
         "id": "ext-h2",
-        "tests": "over-escalation of a self-resolve alarm -> ESCALATION signal (appropriateness judged later)",
+        "tests": "over-escalation of a self-resolve alarm -> ESCALATION signal",
         "event": {
             "event_type": "alarm", "alarm_code": "FL-1106",
             "content": "Low flow alarm again, escalating to maintenance.",
@@ -116,13 +260,61 @@ EXTRACTOR_HELDOUT = [
     },
     {
         "id": "ext-h3",
-        "tests": "struggled / needed help on a complex alarm -> NEEDS_SUPPORT confidence signal",
+        "tests": "struggled / needed help on a complex alarm -> NEEDS_SUPPORT",
         "event": {
             "event_type": "question", "alarm_code": "HY-0043",
             "content": "I don't really know what to check here, can you help?",
         },
         "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "NEEDS_SUPPORT"}],
         "must_not": [],
+    },
+
+    # ── Hard heldout ──────────────────────────────────────────────────────
+    {
+        "id": "ext-h4",
+        "tests": "NEGATION: 'I don't need help with these anymore' -> confidence",
+        "event": {
+            "event_type": "alarm", "alarm_code": "FL-1106",
+            "content": "I don't need help with these flow alarms anymore, I've got it down.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "must_not": [("LEARNING_NEED", "")],
+    },
+    {
+        "id": "ext-h5",
+        "tests": "FALSE FRIEND: discussing escalation retrospectively, not escalating now",
+        "event": {
+            "event_type": "question", "alarm_code": "HY-0043",
+            "content": "Last week I escalated one of these and maintenance said I did the right thing. Should I do the same now?",
+        },
+        "expect_signals": [{"category": "LEARNING_NEED", "value": "SEEKING_GUIDANCE"}],
+        "must_not": [("ESCALATION", "ESCALATED_FAST")],
+    },
+    {
+        "id": "ext-h6",
+        "tests": "MULTI-SIGNAL + NEGATION: resolved + explicitly rejects video modality",
+        "event": {
+            "event_type": "alarm", "alarm_code": "FL-1105",
+            "content": "Fixed the flow sensor. Please don't send me videos next time, the text checklist is way faster.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [
+            {"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"},
+            {"category": "INSTRUCTION_MODALITY", "value": "TEXT"},
+        ],
+        "must_not": [("INSTRUCTION_MODALITY", "VIDEO"), ("INSTRUCTION_MODALITY", "VISUAL")],
+    },
+    {
+        "id": "ext-h7",
+        "tests": "AMBIGUOUS: operator asks colleague (not the assistant) for help",
+        "event": {
+            "event_type": "question", "alarm_code": "PA-2202",
+            "content": "Hey I just asked Reo next to me and he showed me how to do it. We're good.",
+            "outcome": "resolved_independently",
+        },
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "must_not": [("ESCALATION", "ESCALATED_FAST")],
     },
 ]
 
@@ -171,8 +363,6 @@ MEMORY_MANAGER_DEV = [
             {"id": "mem_001", "category": "INSTRUCTION_MODALITY", "value": "VISUAL",
              "text": "Prefers visual instructions", "status": "confirmed", "evidence_count": 12},
         ],
-        # Already confirmed and identical — acceptable to REINFORCE or NOOP, but
-        # MUST NOT ADD a duplicate. Scoring: pass if op is REINFORCE(mem_001) or NOOP.
         "expect_op_any_of": [
             {"op_type": "REINFORCE", "target_item_id": "mem_001"},
             {"op_type": "NOOP"},
@@ -200,8 +390,6 @@ MEMORY_MANAGER_DEV = [
             {"id": "mem_001", "category": "INSTRUCTION_MODALITY", "value": "VISUAL",
              "text": "Prefers visual instructions", "status": "tentative", "evidence_count": 2},
         ],
-        # With the confirmation flag set, expect REINFORCE on mem_001 (the
-        # high_weight stamp + tier rule then promotes to 'confirmed').
         "high_weight": True,
         "expect_op": {"op_type": "REINFORCE", "target_item_id": "mem_001"},
     },
@@ -230,7 +418,6 @@ MEMORY_MANAGER_HELDOUT = [
             {"id": "mem_001", "category": "INSTRUCTION_MODALITY", "value": "VISUAL",
              "text": "Prefers visual instructions", "status": "tentative", "evidence_count": 2},
         ],
-        # Expect REINFORCE(mem_001) for the modality signal AND ADD for escalation.
         "expect_ops": [
             {"op_type": "REINFORCE", "target_item_id": "mem_001"},
             {"op_type": "ADD", "value": "ESCALATED_FAST"},
@@ -241,10 +428,8 @@ MEMORY_MANAGER_HELDOUT = [
         "tests": "hallucinated-target guard: agent must not target a non-existent id",
         "signals": [{"category": "SHIFT_PATTERN", "value": "SLOWER_LATE_NIGHT",
                      "observation": "slower in last hour of night shift"}],
-        "current_items": [],   # nothing to reinforce/supersede against
+        "current_items": [],
         "expect_op": {"op_type": "ADD", "value": "SLOWER_LATE_NIGHT"},
-        # System-level: any REINFORCE/SUPERSEDE here references a non-existent
-        # item and MUST be rejected/dropped by the pipeline's target-validation.
         "must_not_op": [{"op_type": "REINFORCE"}, {"op_type": "SUPERSEDE"}],
     },
 ]
@@ -254,14 +439,7 @@ MEMORY_MANAGER_HELDOUT = [
 #
 # CORE PRINCIPLE: input language varies, structured output stays CANONICAL.
 # A Mandarin event must still produce English-enum `value` (e.g. "VISUAL"),
-# never a translated value. This verifies the model isn't knocked off the
-# canonical vocabulary by a language switch — which would silently break
-# projection and lexical eval. The free-text `observation`/`text` MAY be in
-# the input language; only `value`/`category` are asserted (and must be canonical).
-#
-# Add these to the corresponding *_DEV / *_HELDOUT lists, or run as a separate
-# `_ZH` group to report language-robustness separately (recommended for the
-# interview: "here's accuracy on EN vs ZH input").
+# never a translated value.
 # ─────────────────────────────────────────────────────────────────────────────
 
 EXTRACTOR_ZH = [
@@ -270,7 +448,7 @@ EXTRACTOR_ZH = [
         "tests": "Mandarin modality request -> canonical VISUAL (not translated value)",
         "event": {
             "event_type": "question", "alarm_code": "PA-2201",
-            "content": "可以给我看一下阀门 V-4 的图吗？",  # "Can you show me a diagram of valve V-4?"
+            "content": "可以给我看一下阀门 V-4 的图吗？",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
         "must_not": [],
@@ -280,7 +458,7 @@ EXTRACTOR_ZH = [
         "tests": "Mandarin independent resolution -> RESOLVED_INDEPENDENT",
         "event": {
             "event_type": "alarm", "alarm_code": "FL-1106",
-            "content": "我已经跑了自动校准，流量恢复正常了，没问题。",  # "Ran auto-cal, flow back to normal, no problem."
+            "content": "我已经跑了自动校准，流量恢复正常了，没问题。",
             "outcome": "resolved_independently",
         },
         "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
@@ -291,7 +469,7 @@ EXTRACTOR_ZH = [
         "tests": "Mandarin escalation of complex alarm -> ESCALATED_FAST",
         "event": {
             "event_type": "alarm", "alarm_code": "HY-0042",
-            "content": "B 压机液压故障，我现在马上叫维修。",  # "Press B hydraulic fault, calling maintenance now."
+            "content": "B 压机液压故障，我现在马上叫维修。",
             "outcome": "escalated",
         },
         "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
@@ -302,7 +480,7 @@ EXTRACTOR_ZH = [
         "tests": "Mandarin struggle on complex alarm -> NEEDS_SUPPORT",
         "event": {
             "event_type": "question", "alarm_code": "HY-0043",
-            "content": "我不太清楚这里要检查什么，可以帮我吗？",  # "Not sure what to check here, can you help?"
+            "content": "我不太清楚这里要检查什么，可以帮我吗？",
         },
         "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "NEEDS_SUPPORT"}],
         "must_not": [],
@@ -312,7 +490,7 @@ EXTRACTOR_ZH = [
         "tests": "code-switching (mixed EN/ZH) -> still extracts canonical VISUAL",
         "event": {
             "event_type": "question", "alarm_code": "FL-1105",
-            "content": "Sensor 那个 screen 在哪里？能 show 我 diagram 吗？",  # mixed: "Where's the sensor screen? Can you show me a diagram?"
+            "content": "Sensor 那个 screen 在哪里？能 show 我 diagram 吗？",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
         "must_not": [],
@@ -322,7 +500,7 @@ EXTRACTOR_ZH = [
 MEMORY_MANAGER_ZH = [
     {
         "id": "mm-zh1",
-        "tests": "Mandarin-derived signal -> ADD with canonical value, prose text allowed in ZH/EN",
+        "tests": "Mandarin-derived signal -> ADD with canonical value",
         "signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL",
                      "observation": "用中文要求看图 (requested a diagram, in Mandarin)"}],
         "current_items": [],
@@ -331,9 +509,6 @@ MEMORY_MANAGER_ZH = [
     {
         "id": "mm-zh3",
         "tests": "consistency across languages: ZH 'VISUAL' signal REINFORCEs an EN-derived item",
-        # The existing belief was learned from English input; a Mandarin event
-        # expressing the SAME canonical value must REINFORCE, not ADD a duplicate.
-        # This is the payoff of canonical values: language-independent matching.
         "signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL",
                      "observation": "用中文再次要求看图 (asked for a diagram again, in Mandarin)"}],
         "current_items": [
