@@ -45,6 +45,7 @@ class KGDraft(BaseModel):
 
 _agent: Agent[None, KGDraft] = Agent(
     make_strong_model(),
+    name="manual_extractor",
     output_type=KGDraft,
     output_retries=3,
     system_prompt="""\

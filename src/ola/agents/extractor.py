@@ -28,6 +28,7 @@ class SignalList(BaseModel):
 
 _agent: Agent[None, SignalList] = Agent(
     make_model(),
+    name="extractor",
     output_type=SignalList,
     system_prompt=_SYSTEM,
     output_retries=3,

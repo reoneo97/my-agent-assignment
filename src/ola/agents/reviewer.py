@@ -53,6 +53,7 @@ class ConformanceResult(BaseModel):
 
 _consolidate_agent: Agent[None, ConsolidateOutput] = Agent(
     _model,
+    name="reviewer.consolidate",
     output_type=ConsolidateOutput,
     output_retries=3,
     system_prompt="""\
@@ -72,6 +73,7 @@ Rules:
 
 _conformance_agent: Agent[None, ConformanceResult] = Agent(
     _model,
+    name="reviewer.conformance",
     output_type=ConformanceResult,
     output_retries=3,
     system_prompt="""\
@@ -84,6 +86,7 @@ if they meaningfully differ from the SOP, not just stylistic variations.
 
 _synopsis_agent: Agent[None, str] = Agent(
     _model,
+    name="reviewer.synopsis",
     output_type=str,
     system_prompt="""\
 You are writing an operator behavioural synopsis for a manufacturing AI assistant.

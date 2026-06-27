@@ -23,7 +23,7 @@ do NOT ask multiple confirmation questions at once.
 Never add friction to escalation; always make it easy for the operator to get help.
 """
 
-_agent: Agent[None, str] = Agent(make_model(), output_type=str, system_prompt=_SYSTEM)
+_agent: Agent[None, str] = Agent(make_model(), name="responder", output_type=str, system_prompt=_SYSTEM)
 
 
 def _build_prompt_from_bundle(bundle: "ContextBundle") -> str:  # type: ignore[name-defined]

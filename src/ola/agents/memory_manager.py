@@ -45,6 +45,7 @@ class OperationList(BaseModel):
 
 _agent: Agent[None, OperationList] = Agent(
     make_model(),
+    name="memory_manager",
     output_type=OperationList,
     system_prompt=_SYSTEM,
     output_retries=3,
