@@ -19,3 +19,6 @@ class BehaviouralSignal(BaseModel):
     observation: str  # short NL description
     value: str  # normalized value, e.g. "VISUAL", "ESCALATED_FAST"
     source_event_id: str
+
+    def model_post_init(self, __context) -> None:
+        object.__setattr__(self, "value", self.value.upper())

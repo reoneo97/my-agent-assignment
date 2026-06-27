@@ -47,7 +47,7 @@ async def run_eval(operator_id: str, n: int, db_path: str) -> None:
 
     all_traits = {**gt["early_traits"], **gt.get("drifted_traits", {})}
 
-    with mlflow.start_run(run_name=f"loop-eval-{operator_id}-n{n}") as run:
+    with mlflow.start_run(run_name="full-loop-eval", tags={"operator_id": operator_id, "n": str(n)}) as run:
         mlflow.log_params({"operator_id": operator_id, "n_interactions": n})
 
         session_id = get_or_create_session(operator_id, db_path=db_path)

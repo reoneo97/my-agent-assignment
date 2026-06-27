@@ -212,34 +212,31 @@ async def run_memory_manager_eval(cases, set_name):
 
 
 async def main():
-    with mlflow.start_run(run_name="agent-evals"):
-        print("=== Extractor (dev) ===")
+    print("=== Extractor ===")
+    with mlflow.start_run(run_name="extractor-eval", tags={"agent": "extractor"}):
+        print("--- dev ---")
         ext_dev = await run_extractor_eval(EXTRACTOR_DEV, "extractor_dev")
-        mlflow.log_metric("extractor_dev_accuracy", ext_dev)
-
-        print("=== Extractor (heldout) ===")
+        print("--- heldout ---")
         ext_held = await run_extractor_eval(EXTRACTOR_HELDOUT, "extractor_heldout")
-        mlflow.log_metric("extractor_heldout_accuracy", ext_held)
-
-        print("=== Extractor (zh) ===")
+        print("--- zh ---")
         ext_zh = await run_extractor_eval(EXTRACTOR_ZH, "extractor_zh")
-        mlflow.log_metric("extractor_zh_accuracy", ext_zh)
+        mlflow.log_metric("dev_accuracy", ext_dev)
+        mlflow.log_metric("heldout_accuracy", ext_held)
+        mlflow.log_metric("zh_accuracy", ext_zh)
+    print(f"  dev={ext_dev:.0%}  heldout={ext_held:.0%}  zh={ext_zh:.0%}\n")
 
-        print("=== Memory Manager (dev) ===")
+    print("=== Memory Manager ===")
+    with mlflow.start_run(run_name="memory-manager-eval", tags={"agent": "memory_manager"}):
+        print("--- dev ---")
         mm_dev = await run_memory_manager_eval(MEMORY_MANAGER_DEV, "mm_dev")
-        mlflow.log_metric("mm_dev_accuracy", mm_dev)
-
-        print("=== Memory Manager (heldout) ===")
+        print("--- heldout ---")
         mm_held = await run_memory_manager_eval(MEMORY_MANAGER_HELDOUT, "mm_heldout")
-        mlflow.log_metric("mm_heldout_accuracy", mm_held)
-
-        print("=== Memory Manager (zh) ===")
+        print("--- zh ---")
         mm_zh = await run_memory_manager_eval(MEMORY_MANAGER_ZH, "mm_zh")
-        mlflow.log_metric("mm_zh_accuracy", mm_zh)
-
-        print("=== Summary ===")
-        print(f"  Extractor:      dev={ext_dev:.0%}  heldout={ext_held:.0%}  zh={ext_zh:.0%}")
-        print(f"  Memory Manager: dev={mm_dev:.0%}  heldout={mm_held:.0%}  zh={mm_zh:.0%}")
+        mlflow.log_metric("dev_accuracy", mm_dev)
+        mlflow.log_metric("heldout_accuracy", mm_held)
+        mlflow.log_metric("zh_accuracy", mm_zh)
+    print(f"  dev={mm_dev:.0%}  heldout={mm_held:.0%}  zh={mm_zh:.0%}")
 
 
 if __name__ == "__main__":
