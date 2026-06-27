@@ -14,7 +14,7 @@ from typing import Literal
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from ola.agents.provider import make_strong_model
+from ola.agents.provider import make_strong_model, STRONG_SETTINGS
 from ola.domain.memory import Hypothesis, OperatorProfile
 from ola.domain.signals import TraitCategory
 from ola.telemetry import traced_agent
@@ -55,7 +55,8 @@ _consolidate_agent: Agent[None, ConsolidateOutput] = Agent(
     _model,
     name="reviewer.consolidate",
     output_type=ConsolidateOutput,
-    output_retries=3,
+    retries=3,
+    model_settings=STRONG_SETTINGS,
     system_prompt="""\
 You are reviewing a shift's operator interactions to update a behavioural profile.
 Given recent operator events and the current profile, propose memory operations
@@ -75,7 +76,8 @@ _conformance_agent: Agent[None, ConformanceResult] = Agent(
     _model,
     name="reviewer.conformance",
     output_type=ConformanceResult,
-    output_retries=3,
+    retries=3,
+    model_settings=STRONG_SETTINGS,
     system_prompt="""\
 You are classifying whether an operator followed the standard procedure (SOP)
 for an alarm. Compare what the operator did (observed action) against the
@@ -88,6 +90,7 @@ _synopsis_agent: Agent[None, str] = Agent(
     _model,
     name="reviewer.synopsis",
     output_type=str,
+    model_settings=STRONG_SETTINGS,
     system_prompt="""\
 You are writing an operator behavioural synopsis for a manufacturing AI assistant.
 Write a single paragraph (4-6 sentences) in third person describing the operator's

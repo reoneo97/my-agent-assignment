@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from ola.agents.provider import make_model
+from ola.agents.provider import make_model, FAST_SETTINGS
 from ola.domain.events import OperatorInteraction
 from ola.domain.signals import BehaviouralSignal
 from ola.telemetry import log_agent_failure, traced_agent
@@ -37,7 +37,8 @@ _agent: Agent[None, SignalList] = Agent(
     name="extractor",
     output_type=SignalList,
     system_prompt=_SYSTEM,
-    output_retries=3,
+    retries=3,
+    model_settings=FAST_SETTINGS,
 )
 
 @traced_agent(name='extractor')

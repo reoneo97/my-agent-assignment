@@ -4,6 +4,12 @@ Agent-level eval harness.
 Runs structured-output evals against individual agents (Extractor, Memory Manager)
 using hand-authored cases with deterministic scoring — no LLM judge needed.
 
+Refactored onto mlflow.genai.evaluate(): each case becomes a dataset row
+({"inputs", "expectations", "tags"}), predict_fn calls the agent, and a
+@scorer function reuses the original pass/fail logic but returns a Feedback
+object so failures are inspectable per-row in the MLflow UI/trace, not just
+in stdout.
+
 Three sets per agent:
   dev     — tune against these
   heldout — report final numbers here (don't tune to it)
@@ -15,7 +21,6 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import sys
 from pathlib import Path
 
@@ -23,15 +28,19 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 import mlflow  # noqa: E402
+from mlflow.entities import Feedback  # noqa: E402
+from mlflow.genai import scorer  # noqa: E402
 
 from ola.telemetry import setup_tracing
 from ola.agents.extractor import extract_signals
 from ola.agents.memory_manager import decide_operations
 from ola.domain.events import OperatorInteraction
 from ola.domain.memory import MemoryItem
+from ola.domain.signals import BehaviouralSignal, TraitCategory
 from eval.eval_sets import (
     EXTRACTOR_DEV,
     EXTRACTOR_HELDOUT,
@@ -44,200 +53,237 @@ from eval.eval_sets import (
 setup_tracing()
 
 
-# ── Scoring helpers ──────────────────────────────────────────────────────────
+# ── Case -> mlflow dataset row adapters ──────────────────────────────────────
+#
+# eval_sets.py keeps its original hand-authored shape (event/signals + expect_*
+# fields per case). We adapt each case into the {"inputs", "expectations",
+# "tags"} shape mlflow.genai.evaluate() expects, rather than rewriting the
+# eval sets themselves.
 
 
-def score_extractor(produced_signals, case):
-    """Check expected signals present, must_not signals absent."""
-    results = {"pass": True, "details": []}
-
-    for expected in case.get("expect_signals", []):
-        found = any(
-            s.category.value == expected["category"] and s.value == expected["value"]
-            for s in produced_signals
-        )
-        if not found:
-            results["pass"] = False
-            results["details"].append(f"MISSING: {expected}")
-
-    for category, substr in case.get("must_not", []):
-        violation = any(
-            s.category.value == category and (not substr or substr in s.value)
-            for s in produced_signals
-        )
-        if violation:
-            results["pass"] = False
-            results["details"].append(f"MUST_NOT violated: {category}/{substr}")
-
-    # Empty expected + any signals produced = fabrication fail
-    if not case.get("expect_signals") and produced_signals:
-        results["pass"] = False
-        results["details"].append(
-            f"FABRICATED: {len(produced_signals)} signals from no-signal event"
-        )
-
-    return results
+def extractor_case_to_row(case: dict) -> dict:
+    return {
+        "inputs": {"event": case["event"]},
+        "expectations": {
+            "expect_signals": case.get("expect_signals", []),
+            "must_not": case.get("must_not", []),
+        },
+        "tags": {"id": case["id"], "tests": case["tests"]},
+    }
 
 
-def score_memory_manager(produced_ops, case):
-    """Check expected ops present, forbidden ops absent."""
-    results = {"pass": True, "details": []}
-
+def memory_manager_case_to_row(case: dict) -> dict:
+    expectations = {
+        "expect_ops": case.get("expect_ops", []),
+        "expect_op_any_of": case.get("expect_op_any_of", []),
+        "must_not_op": case.get("must_not_op", []),
+    }
     if "expect_op" in case:
-        found = any(matches_op(op, case["expect_op"]) for op in produced_ops)
-        if not found:
-            results["pass"] = False
-            results["details"].append(f"MISSING op: {case['expect_op']}")
+        expectations["expect_op"] = case["expect_op"]
+    return {
+        "inputs": {
+            "signals": case["signals"],
+            "current_items": case.get("current_items", []),
+        },
+        "expectations": expectations,
+        "tags": {"id": case["id"], "tests": case["tests"]},
+    }
 
-    for expected in case.get("expect_ops", []):
-        found = any(matches_op(op, expected) for op in produced_ops)
-        if not found:
-            results["pass"] = False
-            results["details"].append(f"MISSING op: {expected}")
 
-    if "expect_op_any_of" in case:
-        found = any(
-            any(matches_op(op, exp) for op in produced_ops)
-            for exp in case["expect_op_any_of"]
+# ── predict_fn — wraps each agent so mlflow can call it per-row ─────────────
+# mlflow.genai.evaluate() auto-detects async predict_fns and awaits them, and
+# runs rows in a threadpool, so no asyncio.run/gather plumbing is needed here.
+
+
+async def extractor_predict_fn(event: dict) -> list[dict]:
+    interaction = OperatorInteraction(
+        id=event.get("source_event_id", "eval-event"),
+        operator_id="eval-operator",
+        timestamp="2026-06-27T00:00:00Z",
+        event_type=event["event_type"],
+        alarm_code=event.get("alarm_code"),
+        content=event["content"],
+        outcome=event.get("outcome"),
+        requested_modality=event.get("requested_modality"),
+    )
+    signals = await extract_signals(interaction)
+    return [{"category": s.category.value, "value": s.value} for s in signals]
+
+
+async def memory_manager_predict_fn(
+    signals: list[dict], current_items: list[dict]
+) -> list[dict]:
+    behavioural_signals = [
+        BehaviouralSignal(
+            category=TraitCategory(s["category"]),
+            value=s["value"],
+            observation=s["observation"],
+            source_event_id="eval-event",
         )
-        if not found:
-            results["pass"] = False
-            results["details"].append(f"NONE matched: {case['expect_op_any_of']}")
+        for s in signals
+    ]
+    memory_items = [
+        MemoryItem(
+            id=item["id"],
+            operator_id="eval-operator",
+            text=item["text"],
+            value=item["value"],
+            category=TraitCategory(item["category"]),
+            status=item["status"],
+            evidence_count=item["evidence_count"],
+            source_event_ids=[],
+            created_at="2026-06-01T00:00:00Z",
+            last_reinforced_at="2026-06-01T00:00:00Z",
+            superseded_by=None,
+        )
+        for item in current_items
+    ]
+    ops = await decide_operations(
+        signals=behavioural_signals,
+        current_items=memory_items,
+        operator_id="eval-operator",
+        source_event_id="eval-event",
+    )
+    return [
+        {"op_type": op.op_type, "target_item_id": op.target_item_id, "value": op.value}
+        for op in ops
+    ]
 
-    for forbidden in case.get("must_not_op", []):
-        if any(matches_op(op, forbidden) for op in produced_ops):
-            results["pass"] = False
-            results["details"].append(f"FORBIDDEN op found: {forbidden}")
 
-    return results
+# ── Scorers — same pass/fail logic as before, now as Feedback ──────────────
 
 
-def matches_op(produced, expected):
-    """Match a produced op against an expected op spec on all specified fields."""
-    if produced.op_type.upper() != expected.get("op_type", "").upper():
+def _matches_op(produced: dict, expected: dict) -> bool:
+    if produced["op_type"].upper() != expected.get("op_type", "").upper():
         return False
-    if "target_item_id" in expected and produced.target_item_id != expected["target_item_id"]:
+    if (
+        "target_item_id" in expected
+        and produced["target_item_id"] != expected["target_item_id"]
+    ):
         return False
-    if "value" in expected and produced.value != expected["value"]:
+    if "value" in expected and produced["value"] != expected["value"]:
         return False
     return True
+
+
+@scorer
+def extractor_correctness(outputs: list[dict], expectations: dict) -> Feedback:
+    """Expected signals present, must_not signals absent, no fabrication."""
+    details = []
+
+    for expected in expectations.get("expect_signals", []):
+        found = any(
+            o["category"] == expected["category"] and o["value"] == expected["value"]
+            for o in outputs
+        )
+        if not found:
+            details.append(f"MISSING: {expected}")
+
+    for category, substr in expectations.get("must_not", []):
+        violation = any(
+            o["category"] == category and (not substr or substr in o["value"])
+            for o in outputs
+        )
+        if violation:
+            details.append(f"MUST_NOT violated: {category}/{substr}")
+
+    if not expectations.get("expect_signals") and outputs:
+        details.append(f"FABRICATED: {len(outputs)} signals from no-signal event")
+
+    passed = not details
+    return Feedback(value=passed, rationale="; ".join(details) if details else "pass")
+
+
+@scorer
+def memory_manager_correctness(outputs: list[dict], expectations: dict) -> Feedback:
+    """Expected ops present, forbidden ops absent."""
+    details = []
+
+    expect_op = expectations.get("expect_op")
+    if expect_op:
+        found = any(_matches_op(op, expect_op) for op in outputs)
+        if not found:
+            details.append(f"MISSING op: {expect_op}")
+
+    for expected in expectations.get("expect_ops", []):
+        found = any(_matches_op(op, expected) for op in outputs)
+        if not found:
+            details.append(f"MISSING op: {expected}")
+
+    expect_any_of = expectations.get("expect_op_any_of", [])
+    if expect_any_of:
+        found = any(
+            any(_matches_op(op, exp) for op in outputs) for exp in expect_any_of
+        )
+        if not found:
+            details.append(f"NONE matched: {expect_any_of}")
+
+    for forbidden in expectations.get("must_not_op", []):
+        if any(_matches_op(op, forbidden) for op in outputs):
+            details.append(f"FORBIDDEN op found: {forbidden}")
+
+    passed = not details
+    return Feedback(value=passed, rationale="; ".join(details) if details else "pass")
 
 
 # ── Runners ──────────────────────────────────────────────────────────────────
 
 
-async def run_extractor_eval(cases, set_name):
-    passed = 0
-    for case in cases:
-        event = OperatorInteraction(
-            id=case["event"].get("source_event_id", "eval-event"),
-            operator_id="eval-operator",
-            timestamp="2026-06-27T00:00:00Z",
-            event_type=case["event"]["event_type"],
-            alarm_code=case["event"].get("alarm_code"),
-            content=case["event"]["content"],
-            outcome=case["event"].get("outcome"),
-            requested_modality=case["event"].get("requested_modality"),
-        )
-        signals = await extract_signals(event)
-        result = score_extractor(signals, case)
+def _label_run(run_id: str, name: str, tags: dict) -> None:
+    client = mlflow.MlflowClient()
+    client.set_tag(run_id, "mlflow.runName", name)
+    for k, v in tags.items():
+        client.set_tag(run_id, k, v)
 
-        if result["pass"]:
-            passed += 1
-            print(f"  ✓ {case['id']}: {case['tests']}")
-        else:
-            print(f"  ✗ {case['id']}: {case['tests']}")
-            for d in result["details"]:
-                print(f"      {d}")
 
-    total = len(cases)
-    accuracy = passed / total if total else 0
-    print(f"\n  {set_name}: {passed}/{total} ({accuracy:.0%})\n")
+def run_extractor_eval(cases: list[dict], set_name: str):
+    dataset = [extractor_case_to_row(c) for c in cases]
+    results = mlflow.genai.evaluate(
+        data=dataset,
+        predict_fn=extractor_predict_fn,
+        scorers=[extractor_correctness],
+    )
+    _label_run(results.run_id, f"extractor-eval-{set_name}", {"agent": "extractor", "set": set_name})
+    accuracy = results.metrics.get("extractor_correctness/mean", 0.0)
+    print(f"  {set_name}: accuracy={accuracy:.0%}  (see MLflow run for per-case rationale)\n")
     return accuracy
 
 
-async def run_memory_manager_eval(cases, set_name):
-    from ola.domain.signals import BehaviouralSignal, TraitCategory
-
-    passed = 0
-    for case in cases:
-        signals = [
-            BehaviouralSignal(
-                category=TraitCategory(s["category"]),
-                value=s["value"],
-                observation=s["observation"],
-                source_event_id="eval-event",
-            )
-            for s in case["signals"]
-        ]
-        current_items = [
-            MemoryItem(
-                id=item["id"],
-                operator_id="eval-operator",
-                text=item["text"],
-                value=item["value"],
-                category=TraitCategory(item["category"]),
-                status=item["status"],
-                evidence_count=item["evidence_count"],
-                source_event_ids=[],
-                created_at="2026-06-01T00:00:00Z",
-                last_reinforced_at="2026-06-01T00:00:00Z",
-                superseded_by=None,
-            )
-            for item in case.get("current_items", [])
-        ]
-        ops = await decide_operations(
-            signals=signals,
-            current_items=current_items,
-            operator_id="eval-operator",
-            source_event_id="eval-event",
-        )
-        result = score_memory_manager(ops, case)
-
-        if result["pass"]:
-            passed += 1
-            print(f"  ✓ {case['id']}: {case['tests']}")
-        else:
-            print(f"  ✗ {case['id']}: {case['tests']}")
-            for d in result["details"]:
-                print(f"      {d}")
-
-    total = len(cases)
-    accuracy = passed / total if total else 0
-    print(f"\n  {set_name}: {passed}/{total} ({accuracy:.0%})\n")
+def run_memory_manager_eval(cases: list[dict], set_name: str):
+    dataset = [memory_manager_case_to_row(c) for c in cases]
+    results = mlflow.genai.evaluate(
+        data=dataset,
+        predict_fn=memory_manager_predict_fn,
+        scorers=[memory_manager_correctness],
+    )
+    _label_run(results.run_id, f"memory-manager-eval-{set_name}", {"agent": "memory_manager", "set": set_name})
+    accuracy = results.metrics.get("memory_manager_correctness/mean", 0.0)
+    print(f"  {set_name}: accuracy={accuracy:.0%}  (see MLflow run for per-case rationale)\n")
     return accuracy
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
-async def main():
+def main():
     print("=== Extractor ===")
-    with mlflow.start_run(run_name="extractor-eval", tags={"agent": "extractor"}):
-        print("--- dev ---")
-        ext_dev = await run_extractor_eval(EXTRACTOR_DEV, "extractor_dev")
-        print("--- heldout ---")
-        ext_held = await run_extractor_eval(EXTRACTOR_HELDOUT, "extractor_heldout")
-        print("--- zh ---")
-        ext_zh = await run_extractor_eval(EXTRACTOR_ZH, "extractor_zh")
-        mlflow.log_metric("dev_accuracy", ext_dev)
-        mlflow.log_metric("heldout_accuracy", ext_held)
-        mlflow.log_metric("zh_accuracy", ext_zh)
+    print("--- dev ---")
+    ext_dev = run_extractor_eval(EXTRACTOR_DEV, "dev")
+    print("--- heldout ---")
+    ext_held = run_extractor_eval(EXTRACTOR_HELDOUT, "heldout")
+    print("--- zh ---")
+    ext_zh = run_extractor_eval(EXTRACTOR_ZH, "zh")
     print(f"  dev={ext_dev:.0%}  heldout={ext_held:.0%}  zh={ext_zh:.0%}\n")
 
     print("=== Memory Manager ===")
-    with mlflow.start_run(run_name="memory-manager-eval", tags={"agent": "memory_manager"}):
-        print("--- dev ---")
-        mm_dev = await run_memory_manager_eval(MEMORY_MANAGER_DEV, "mm_dev")
-        print("--- heldout ---")
-        mm_held = await run_memory_manager_eval(MEMORY_MANAGER_HELDOUT, "mm_heldout")
-        print("--- zh ---")
-        mm_zh = await run_memory_manager_eval(MEMORY_MANAGER_ZH, "mm_zh")
-        mlflow.log_metric("dev_accuracy", mm_dev)
-        mlflow.log_metric("heldout_accuracy", mm_held)
-        mlflow.log_metric("zh_accuracy", mm_zh)
+    print("--- dev ---")
+    mm_dev = run_memory_manager_eval(MEMORY_MANAGER_DEV, "dev")
+    print("--- heldout ---")
+    mm_held = run_memory_manager_eval(MEMORY_MANAGER_HELDOUT, "heldout")
+    print("--- zh ---")
+    mm_zh = run_memory_manager_eval(MEMORY_MANAGER_ZH, "zh")
     print(f"  dev={mm_dev:.0%}  heldout={mm_held:.0%}  zh={mm_zh:.0%}")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
