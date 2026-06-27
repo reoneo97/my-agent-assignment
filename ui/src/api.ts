@@ -2,7 +2,6 @@ import type {
   InteractionResponse,
   MockAlarmResponse,
   Operator,
-  Profile,
   ShiftEndResponse,
   Synopsis,
 } from "./types";
@@ -26,12 +25,12 @@ async function get<T>(path: string): Promise<T> {
   return res.json();
 }
 
-export function sendUserMessage(operatorId: string, message: string): Promise<InteractionResponse> {
-  return post("/api/interaction", { operator_id: operatorId, source: "user", message });
+export function sendUserMessage(operatorId: string, message: string, sessionId?: string): Promise<InteractionResponse> {
+  return post("/api/interaction", { operator_id: operatorId, session_id: sessionId, source: "user", message });
 }
 
-export function sendSimulated(operatorId: string): Promise<InteractionResponse> {
-  return post("/api/interaction", { operator_id: operatorId, source: "simulated" });
+export function sendSimulated(operatorId: string, sessionId?: string): Promise<InteractionResponse> {
+  return post("/api/interaction", { operator_id: operatorId, session_id: sessionId, source: "simulated" });
 }
 
 export function mockAlarm(operatorId: string): Promise<MockAlarmResponse> {
@@ -41,16 +40,13 @@ export function mockAlarm(operatorId: string): Promise<MockAlarmResponse> {
 export function closeSession(
   operatorId: string,
   outcome: "resolved_independently" | "escalated",
+  sessionId?: string,
 ): Promise<InteractionResponse> {
-  return post("/api/interaction", { operator_id: operatorId, source: "user", outcome });
+  return post("/api/interaction", { operator_id: operatorId, session_id: sessionId, source: "user", outcome });
 }
 
 export function endShift(operatorId: string, shift = "day"): Promise<ShiftEndResponse> {
   return post("/api/shift/end", { operator_id: operatorId, shift });
-}
-
-export function fetchProfile(operatorId: string): Promise<Profile> {
-  return get(`/api/profile/${operatorId}`);
 }
 
 export function fetchSynopsis(operatorId: string): Promise<Synopsis> {
@@ -65,6 +61,3 @@ export function resetOperator(operatorId: string): Promise<void> {
   return post(`/api/reset/${operatorId}`);
 }
 
-export function fetchEval(operatorId: string): Promise<unknown> {
-  return get(`/api/eval/${operatorId}`);
-}

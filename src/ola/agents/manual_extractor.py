@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_strong_model
+from ola.telemetry import traced_agent
 
 
 class KGNode(BaseModel):
@@ -44,7 +45,9 @@ class KGDraft(BaseModel):
 
 _agent: Agent[None, KGDraft] = Agent(
     make_strong_model(),
+    name="manual_extractor",
     output_type=KGDraft,
+    output_retries=3,
     system_prompt="""\
 You are extracting structured knowledge from a manufacturing procedure manual.
 Given the manual text, produce:
@@ -64,6 +67,7 @@ Rules:
 )
 
 
+@traced_agent(name="manual-extractor")
 async def extract_from_manual(manual_text: str, source_name: str = "manual") -> KGDraft:
     prompt = f"Manual source: {source_name}\n\n---\n{manual_text}\n---\n\nExtract KG nodes, edges, and procedure contents."
     result = await _agent.run(prompt)

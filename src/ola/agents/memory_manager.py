@@ -8,6 +8,7 @@ from pydantic_ai import Agent
 from ola.agents.provider import make_model
 from ola.domain.memory import MemoryItem, MemoryOperation
 from ola.domain.signals import BehaviouralSignal
+from ola.telemetry import log_agent_failure, traced_agent
 
 _SYSTEM = """\
 You are a memory manager for a manufacturing operator learning assistant.
@@ -44,11 +45,14 @@ class OperationList(BaseModel):
 
 _agent: Agent[None, OperationList] = Agent(
     make_model(),
+    name="memory_manager",
     output_type=OperationList,
     system_prompt=_SYSTEM,
+    output_retries=3,
 )
 
 
+@traced_agent(name="memory_manager")
 async def decide_operations(
     signals: list[BehaviouralSignal],
     current_items: list[MemoryItem],
@@ -77,11 +81,38 @@ Current active memory items:
 
 Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
 """
-    result = await _agent.run(prompt)
+    try:
+        result = await _agent.run(prompt)
+        decisions = result.output.operations
+    except Exception as exc:
+        log_agent_failure(
+            agent_name="memory_manager",
+            exc=exc,
+            context={
+                "operator_id": operator_id,
+                "source_event_id": source_event_id,
+                "signal_count": len(signals),
+                "active_item_count": len(current_items),
+            },
+            prompt=prompt,
+        )
+        # Safe fallback: one NOOP per signal so the pipeline continues unmodified.
+        now = datetime.now(timezone.utc)
+        return [
+            MemoryOperation(
+                id=str(uuid.uuid4()),
+                operator_id=operator_id,
+                op_type="NOOP",
+                source_event_id=source_event_id,
+                rationale="memory_manager structured-output failure — graceful fallback",
+                source="hot_path",
+                timestamp=now,
+            )
+            for _ in signals
+        ]
 
     ops: list[MemoryOperation] = []
     now = datetime.now(timezone.utc)
-    decisions = result.output.operations
     for i, dec in enumerate(decisions):
         op_type = dec.op_type.upper()
         if op_type not in {"ADD", "REINFORCE", "SUPERSEDE", "NOOP"}:

@@ -1,4 +1,4 @@
-export type TierStatus = "tentative" | "established" | "confirmed";
+export type TierStatus = "tentative" | "established" | "confirmed" | "superseded";
 
 export interface ProfileItem {
   id: string;

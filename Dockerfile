@@ -17,7 +17,6 @@ RUN uv sync --no-dev --no-install-project
 COPY src/ ./src/
 COPY sim/ ./sim/
 COPY scripts/ ./scripts/
-COPY api/ ./api/
 COPY data/ ./data/
 COPY entrypoint.sh ./
 COPY --from=ui-builder /ui/dist ./ui/dist

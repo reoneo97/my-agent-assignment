@@ -15,8 +15,9 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_strong_model
-from ola.domain.memory import Hypothesis, MemoryItem, OperatorProfile
+from ola.domain.memory import Hypothesis, OperatorProfile
 from ola.domain.signals import TraitCategory
+from ola.telemetry import traced_agent
 
 _model = make_strong_model()
 
@@ -52,7 +53,9 @@ class ConformanceResult(BaseModel):
 
 _consolidate_agent: Agent[None, ConsolidateOutput] = Agent(
     _model,
+    name="reviewer.consolidate",
     output_type=ConsolidateOutput,
+    output_retries=3,
     system_prompt="""\
 You are reviewing a shift's operator interactions to update a behavioural profile.
 Given recent operator events and the current profile, propose memory operations
@@ -70,7 +73,9 @@ Rules:
 
 _conformance_agent: Agent[None, ConformanceResult] = Agent(
     _model,
+    name="reviewer.conformance",
     output_type=ConformanceResult,
+    output_retries=3,
     system_prompt="""\
 You are classifying whether an operator followed the standard procedure (SOP)
 for an alarm. Compare what the operator did (observed action) against the
@@ -81,6 +86,7 @@ if they meaningfully differ from the SOP, not just stylistic variations.
 
 _synopsis_agent: Agent[None, str] = Agent(
     _model,
+    name="reviewer.synopsis",
     output_type=str,
     system_prompt="""\
 You are writing an operator behavioural synopsis for a manufacturing AI assistant.
@@ -94,7 +100,7 @@ Be concrete and specific. If the profile is sparse, say so and note what is know
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-
+@traced_agent(name="reviewer.consolidate")
 async def consolidate(
     recent_events: list[dict],
     profile: OperatorProfile,
@@ -167,6 +173,7 @@ async def consolidate(
     return ops, hypotheses
 
 
+@traced_agent(name="reviewer.conformance")
 async def classify_conformance(
     alarm_code: str,
     procedure_title: str,
@@ -185,6 +192,7 @@ async def classify_conformance(
     return result.output
 
 
+@traced_agent(name="reviewer.synopsis")
 async def generate_synopsis(profile: OperatorProfile, recent_events: list[dict]) -> str:
     items_text = "\n".join(
         f"- [{i.status}, n={i.evidence_count}] ({i.category.value}) {i.text}"
