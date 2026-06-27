@@ -1,4 +1,4 @@
-.PHONY: install sync lint lint-fix typecheck check test eval mlflow-ui up down clean
+.PHONY: install sync lint lint-fix typecheck check test eval-agents eval-loop eval-agents-docker eval-loop-docker mlflow-ui up down clean
 
 # ── Dev setup ─────────────────────────────────────────────────────────────────
 
@@ -27,9 +27,20 @@ test:
 	uv run python -m pytest tests/ -v
 
 # ── Eval — MLflow logging ─────────────────────────────────────────────────────
+# Local (uv run):
+eval-agents:
+	uv run python -m eval.run_agent_evals
 
-eval:
-	uv run python -m eval.run --operator-id $(or $(OPERATOR),op-demo-01) --n $(or $(N),10)
+eval-loop:
+	uv run python -m eval.run_loop_evals --operator-id $(or $(OPERATOR),op-demo-01) --n $(or $(N),10)
+
+# Droplet (docker compose — mounts eval/ at runtime, no rebuild needed):
+eval-agents-docker:
+	docker compose run --rm -v $(PWD)/eval:/app/eval app uv run python -m eval.run_agent_evals
+
+eval-loop-docker:
+	docker compose run --rm -v $(PWD)/eval:/app/eval app uv run python -m eval.run_loop_evals \
+		--operator-id $(or $(OPERATOR),op-demo-01) --n $(or $(N),10)
 
 mlflow-ui:
 	uv run mlflow ui --backend-store-uri mlruns
