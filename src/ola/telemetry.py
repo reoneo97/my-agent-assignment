@@ -30,6 +30,21 @@ logger = logging.getLogger("ola.agents")
 _setup_done = False
 
 
+def traced_agent(name: str):
+    """Decorator for agent wrapper functions. Names the trace and captures I/O."""
+
+    def decorator(fn):
+        @mlflow.trace(name=name)
+        @wraps(fn)
+        async def wrapper(*args, **kwargs):
+            result = await fn(*args, **kwargs)
+            return result
+
+        return wrapper
+
+    return decorator
+
+
 def setup_tracing() -> None:
     """Idempotent — safe to call from multiple entry points."""
     global _setup_done
@@ -58,17 +73,10 @@ def traced_interaction(fn):
     @wraps(fn)
     async def wrapper(*args, **kwargs):
         session_id = kwargs["session_id"]
-        operator_id = kwargs["interaction"].operator_id
+        operator_id = kwargs.get("operator_id")
         with mlflow.tracing.context(session_id=session_id, user=operator_id):
             return await fn(*args, **kwargs)
     return wrapper
-
-
-@asynccontextmanager
-async def agent_span(name: str):
-    with mlflow.start_span(name=name) as span:
-        span.set_attribute("agent.name", name)
-        yield span
 
 
 def log_agent_failure(

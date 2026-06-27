@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_strong_model
-from ola.telemetry import agent_span
+from ola.telemetry import log_agent_failure, traced_agent
 
 
 class KGNode(BaseModel):
@@ -67,10 +67,10 @@ Rules:
 )
 
 
+@traced_agent(name="manual-extractor")
 async def extract_from_manual(manual_text: str, source_name: str = "manual") -> KGDraft:
     prompt = f"Manual source: {source_name}\n\n---\n{manual_text}\n---\n\nExtract KG nodes, edges, and procedure contents."
-    async with agent_span("manual_extractor"):
-        result = await _agent.run(prompt)
+    result = await _agent.run(prompt)
     return result.output
 
 

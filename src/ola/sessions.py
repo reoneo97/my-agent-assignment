@@ -18,6 +18,7 @@ import random
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
+import mlflow
 
 from ola.agents.memory_manager import decide_operations
 from ola.agents.responder import generate_response_from_bundle
@@ -158,7 +159,6 @@ async def open_alarm_session(
     alarm_code: str | None = None,
     db_path: str | None = None,
 ) -> dict[str, Any]:
-    """Mock Alarm handler (docs/sessions.md §7.1)."""
     kwargs: dict[str, str] = {"db_path": db_path} if db_path else {}
 
     # 1. A new alarm supersedes any open session.
@@ -201,25 +201,26 @@ async def open_alarm_session(
         content=f"Alarm {alarm_code} fired on {machine_id or 'an unspecified machine'}.",
     )
     append_event(alarm_event, **kwargs)
+    print('Session ID:', session_id)
 
-    # 5. Who speaks first (§7.3).
-    proactive_message: str | None = None
-    if alarm_code:
-        disposition = get_operator_alarm_disposition(operator_id, alarm_code)
-        if disposition != "confident":
-            profile = get_profile(operator_id, **kwargs)
-            bundle = assemble(alarm_event, profile, db_path=db_path)
-            proactive_message = await generate_response_from_bundle(bundle)
-            assistant_event = OperatorInteraction(
-                id=str(uuid.uuid4()),
-                operator_id=operator_id,
-                session_id=session_id,
-                role="assistant",
-                timestamp=datetime.now(timezone.utc),
-                event_type="reply",
-                content=proactive_message,
-            )
-            append_event(assistant_event, **kwargs)
+    with mlflow.tracing.context(session_id=session_id, user=operator_id):
+        proactive_message: str | None = None
+        if alarm_code:
+            disposition = get_operator_alarm_disposition(operator_id, alarm_code)
+            if disposition != "confident":
+                profile = get_profile(operator_id, **kwargs)
+                bundle = assemble(alarm_event, profile, db_path=db_path)
+                proactive_message = await generate_response_from_bundle(bundle)
+                assistant_event = OperatorInteraction(
+                    id=str(uuid.uuid4()),
+                    operator_id=operator_id,
+                    session_id=session_id,
+                    role="assistant",
+                    timestamp=datetime.now(timezone.utc),
+                    event_type="reply",
+                    content=proactive_message,
+                )
+                append_event(assistant_event, **kwargs)
 
     return {
         "session_id": session_id,

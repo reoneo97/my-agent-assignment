@@ -17,7 +17,7 @@ from pydantic_ai import Agent
 from ola.agents.provider import make_strong_model
 from ola.domain.memory import Hypothesis, MemoryItem, OperatorProfile
 from ola.domain.signals import TraitCategory
-from ola.telemetry import agent_span
+from ola.telemetry import log_agent_failure, traced_agent
 
 _model = make_strong_model()
 
@@ -100,7 +100,7 @@ Be concrete and specific. If the profile is sparse, say so and note what is know
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-
+@traced_agent(name="reviewer.consolidate")
 async def consolidate(
     recent_events: list[dict],
     profile: OperatorProfile,
@@ -128,8 +128,7 @@ async def consolidate(
         "Propose memory operations and hypotheses based on the evidence above."
     )
 
-    async with agent_span("reviewer.consolidate"):
-        result = await _consolidate_agent.run(prompt)
+    result = await _consolidate_agent.run(prompt)
     out = result.output
 
     now = datetime.now(timezone.utc)
@@ -174,6 +173,7 @@ async def consolidate(
     return ops, hypotheses
 
 
+@traced_agent(name="reviewer.conformance")
 async def classify_conformance(
     alarm_code: str,
     procedure_title: str,
@@ -188,11 +188,11 @@ async def classify_conformance(
         f"What the operator did:\n  {observed_text}\n"
         f"Outcome: {observed_outcome}"
     )
-    async with agent_span("reviewer.conformance"):
-        result = await _conformance_agent.run(prompt)
+    result = await _conformance_agent.run(prompt)
     return result.output
 
 
+@traced_agent(name="reviewer.synopsis")
 async def generate_synopsis(profile: OperatorProfile, recent_events: list[dict]) -> str:
     items_text = "\n".join(
         f"- [{i.status}, n={i.evidence_count}] ({i.category.value}) {i.text}"
@@ -209,6 +209,5 @@ async def generate_synopsis(profile: OperatorProfile, recent_events: list[dict])
         f"Profile items:\n{items_text}\n\n"
         f"Recent interactions (sample):\n{events_summary}"
     )
-    async with agent_span("reviewer.synopsis"):
-        result = await _synopsis_agent.run(prompt)
+    result = await _synopsis_agent.run(prompt)
     return result.output
