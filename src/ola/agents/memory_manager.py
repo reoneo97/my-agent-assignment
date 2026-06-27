@@ -8,7 +8,7 @@ from pydantic_ai import Agent
 from ola.agents.provider import make_model
 from ola.domain.memory import MemoryItem, MemoryOperation
 from ola.domain.signals import BehaviouralSignal
-from ola.telemetry import log_agent_failure
+from ola.telemetry import agent_span, log_agent_failure
 
 _SYSTEM = """\
 You are a memory manager for a manufacturing operator learning assistant.
@@ -80,7 +80,8 @@ Current active memory items:
 Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
 """
     try:
-        result = await _agent.run(prompt)
+        async with agent_span("memory_manager"):
+            result = await _agent.run(prompt)
         decisions = result.output.operations
     except Exception as exc:
         log_agent_failure(

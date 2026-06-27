@@ -5,6 +5,7 @@ import json
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_model
+from ola.telemetry import agent_span
 
 _SYSTEM = """\
 You are a manufacturing shopfloor assistant. You help operators troubleshoot alarms,
@@ -70,7 +71,8 @@ Respond to the operator.
 
 async def generate_response_from_bundle(bundle: "ContextBundle") -> str:  # type: ignore[name-defined]
     from ola.context_assembler import ContextBundle  # local import avoids circular
-    result = await _agent.run(_build_prompt_from_bundle(bundle))
+    async with agent_span("responder"):
+        result = await _agent.run(_build_prompt_from_bundle(bundle))
     return result.output
 
 
@@ -94,7 +96,8 @@ Respond to the operator following the profile and directive above.
 
 
 async def generate_response(content: str, profile_block: str, directive: str, alarm_code: str | None = None, event_type: str = "question") -> str:
-    result = await _agent.run(_build_prompt(content, profile_block, directive, alarm_code, event_type))
+    async with agent_span("responder"):
+        result = await _agent.run(_build_prompt(content, profile_block, directive, alarm_code, event_type))
     return result.output
 
 

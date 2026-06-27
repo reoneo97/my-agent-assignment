@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import traceback
+from contextlib import asynccontextmanager
 from typing import Any
 
 logger = logging.getLogger("ola.agents")
@@ -46,6 +47,29 @@ def setup_tracing() -> None:
         print(f"  MLflow tracing unavailable: {exc}")
 
     _setup_done = True
+
+
+@asynccontextmanager
+async def agent_span(name: str):
+    """Async context manager that wraps an agent call in a named MLflow span.
+
+    The autolog Agent.run span becomes a child of this span, making each agent
+    clearly identifiable in the trace tree by name.
+
+    Usage::
+
+        async with agent_span("extractor"):
+            result = await _agent.run(prompt)
+    """
+    try:
+        import mlflow
+        with mlflow.start_span(name=name) as span:
+            span.set_attribute("agent.name", name)
+            yield span
+    except ImportError:
+        yield None
+    except Exception:
+        yield None
 
 
 def log_agent_failure(

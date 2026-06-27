@@ -17,6 +17,7 @@ from pydantic_ai import Agent
 from ola.agents.provider import make_strong_model
 from ola.domain.memory import Hypothesis, MemoryItem, OperatorProfile
 from ola.domain.signals import TraitCategory
+from ola.telemetry import agent_span
 
 _model = make_strong_model()
 
@@ -124,7 +125,8 @@ async def consolidate(
         "Propose memory operations and hypotheses based on the evidence above."
     )
 
-    result = await _consolidate_agent.run(prompt)
+    async with agent_span("reviewer.consolidate"):
+        result = await _consolidate_agent.run(prompt)
     out = result.output
 
     now = datetime.now(timezone.utc)
@@ -183,7 +185,8 @@ async def classify_conformance(
         f"What the operator did:\n  {observed_text}\n"
         f"Outcome: {observed_outcome}"
     )
-    result = await _conformance_agent.run(prompt)
+    async with agent_span("reviewer.conformance"):
+        result = await _conformance_agent.run(prompt)
     return result.output
 
 
@@ -203,5 +206,6 @@ async def generate_synopsis(profile: OperatorProfile, recent_events: list[dict])
         f"Profile items:\n{items_text}\n\n"
         f"Recent interactions (sample):\n{events_summary}"
     )
-    result = await _synopsis_agent.run(prompt)
+    async with agent_span("reviewer.synopsis"):
+        result = await _synopsis_agent.run(prompt)
     return result.output

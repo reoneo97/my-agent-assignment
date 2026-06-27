@@ -6,7 +6,7 @@ from pydantic_ai import Agent
 from ola.agents.provider import make_model
 from ola.domain.events import OperatorInteraction
 from ola.domain.signals import BehaviouralSignal
-from ola.telemetry import log_agent_failure
+from ola.telemetry import agent_span, log_agent_failure
 
 _SYSTEM = """\
 You are a behavioural signal extractor for a manufacturing assistant.
@@ -48,7 +48,8 @@ Valid categories: {_CATEGORIES}
 Extract behavioural signals. Set source_event_id = "{interaction.id}" on each.
 """
     try:
-        result = await _agent.run(prompt)
+        async with agent_span("extractor"):
+            result = await _agent.run(prompt)
         signals = result.output.signals
         for s in signals:
             s.source_event_id = interaction.id
