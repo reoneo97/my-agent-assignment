@@ -2,7 +2,6 @@ import type {
   InteractionResponse,
   MockAlarmResponse,
   Operator,
-  Profile,
   ShiftEndResponse,
   Synopsis,
 } from "./types";
@@ -50,10 +49,6 @@ export function endShift(operatorId: string, shift = "day"): Promise<ShiftEndRes
   return post("/api/shift/end", { operator_id: operatorId, shift });
 }
 
-export function fetchProfile(operatorId: string): Promise<Profile> {
-  return get(`/api/profile/${operatorId}`);
-}
-
 export function fetchSynopsis(operatorId: string): Promise<Synopsis> {
   return get(`/api/synopsis/${operatorId}`);
 }
@@ -66,6 +61,3 @@ export function resetOperator(operatorId: string): Promise<void> {
   return post(`/api/reset/${operatorId}`);
 }
 
-export function fetchEval(operatorId: string): Promise<unknown> {
-  return get(`/api/eval/${operatorId}`);
-}

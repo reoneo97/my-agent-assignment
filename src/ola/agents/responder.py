@@ -5,7 +5,7 @@ import json
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_model
-from ola.telemetry import log_agent_failure, traced_agent
+from ola.telemetry import traced_agent
 
 _SYSTEM = """\
 You are a manufacturing shopfloor assistant. You help operators troubleshoot alarms,
@@ -74,38 +74,3 @@ async def generate_response_from_bundle(bundle: "ContextBundle") -> str:  # type
     from ola.context_assembler import ContextBundle  # local import avoids circular
     result = await _agent.run(_build_prompt_from_bundle(bundle))
     return result.output
-
-
-# ── Legacy helpers (used by demo.py and stream_interaction) ──────────────────
-
-def _build_prompt(content: str, profile_block: str, directive: str, alarm_code: str | None = None, event_type: str = "question") -> str:
-    return f"""\
-=== OPERATOR PROFILE ===
-{profile_block}
-
-=== POLICY DIRECTIVE ===
-{directive}
-
-=== CURRENT INTERACTION ===
-Event type: {event_type}
-Alarm code: {alarm_code}
-Operator message: {content}
-
-Respond to the operator following the profile and directive above.
-"""
-
-
-@traced_agent(name="responder")
-async def generate_response(content: str, profile_block: str, directive: str, alarm_code: str | None = None, event_type: str = "question") -> str:
-    result = await _agent.run(_build_prompt(content, profile_block, directive, alarm_code, event_type))
-    return result.output
-
-
-from collections.abc import AsyncIterator  # noqa: E402
-
-
-@traced_agent(name="responder")
-async def stream_response(content: str, profile_block: str, directive: str) -> AsyncIterator[str]:
-    async with _agent.run_stream(_build_prompt(content, profile_block, directive)) as result:
-        async for chunk in result.stream_text(delta=True):
-            yield chunk

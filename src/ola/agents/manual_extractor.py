@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_strong_model
-from ola.telemetry import log_agent_failure, traced_agent
+from ola.telemetry import traced_agent
 
 
 class KGNode(BaseModel):

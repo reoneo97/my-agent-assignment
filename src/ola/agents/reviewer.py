@@ -15,9 +15,9 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from ola.agents.provider import make_strong_model
-from ola.domain.memory import Hypothesis, MemoryItem, OperatorProfile
+from ola.domain.memory import Hypothesis, OperatorProfile
 from ola.domain.signals import TraitCategory
-from ola.telemetry import log_agent_failure, traced_agent
+from ola.telemetry import traced_agent
 
 _model = make_strong_model()
 
