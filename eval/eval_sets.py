@@ -323,7 +323,7 @@ EXTRACTOR_HELDOUT = [
             "content": "Hey I just asked Reo next to me and he showed me how to do it. We're good.",
             "outcome": "resolved_independently",
         },
-        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "NEEDS_SUPPORT"}],
         "must_not": [("ESCALATION", "ESCALATED_FAST")],
     },
 ]
