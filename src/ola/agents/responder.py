@@ -27,7 +27,6 @@ Follow the directives precisely. Keep responses practical and concise.
 When a validation directive is present, weave the question naturally into the reply —
 do NOT ask multiple confirmation questions at once.
 Never add friction to escalation; always make it easy for the operator to get help.
-Always answer back in the initial language of OPERATOR MESSAGE
 """
 
 _agent: Agent[None, str] = Agent(make_model(), name="responder", output_type=str, system_prompt=_SYSTEM, model_settings=FAST_SETTINGS)

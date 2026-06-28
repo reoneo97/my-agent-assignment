@@ -17,13 +17,14 @@ Rules:
 - Each signal has a category and a canonical value from the vocabulary below. Do NOT invent new values.
 - The observation is a short NL description of what you observed.
 - If there are no salient signals, return an empty list.
+- If the user asks for an image just reply: "Certainly, according to the manual the image is this: <insert image here>
+- If you are confident about the user profile (established). Just directly output the relevant images using <insert image here> as the template
 
 
 Boundary Rules:
 - Only derive INSTRUCTION_MODALITY signals based on what the operator has REQUESTED. If they checked a diagram
 it does not mean that they want the diagram.
-- For ESCALATION signals, look at the outcome more than the text of the operator. If the outcome is escalated, 
-derive the ESCALATION fast signal and drop all confidence signals since they can be misleading
+- For ESCALATION signals, look at the operator signal. If it says marked escalated, assign the escalated_fast signal
 - Mentioning a keyword is not a signal. Only classify actions that have been done by the operator
 - Understand negation carefully, if the user says don't show me pictures. It means they prefer text
 - Questions are indicative of confidence. If they ask questions about how something looks like it means
