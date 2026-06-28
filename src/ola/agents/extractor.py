@@ -18,6 +18,15 @@ Rules:
 - The observation is a short NL description of what you observed.
 - If there are no salient signals, return an empty list.
 
+
+Boundary Rules:
+- Only derive signals based on what the operator has REQUESTED. If they checked a diagram
+it does not mean that they want the diagram
+- Mentioning a keyword is not a signal. Only classify actions that have been done by the operator
+- Understand negation carefully, if the user says don't show me pictures. It means they prefer text
+- Questions are indicative of confidence. If they ask questions about how something looks like it means
+they need support with the alarm resolution
+
 Category → canonical values (pick exactly one value per signal):
   INSTRUCTION_MODALITY  → VISUAL | TEXT | HUMAN_GUIDANCE
   ESCALATION            → ESCALATED_FAST | ESCALATED_SLOW | SELF_RESOLVED
