@@ -46,27 +46,6 @@ cp .env.example .env
 # Edit .env — set MODEL_API_KEY to your OpenRouter API key
 ```
 
-## Running locally (dev)
-
-```bash
-# Terminal 1 — FastAPI backend with hot reload
-make api
-
-# Terminal 2 — React UI at http://localhost:5173
-make ui
-
-# The Vite dev server proxies /api → http://localhost:8000 automatically.
-```
-
-```bash
-# Run the CLI demo instead (10 interactions by default)
-make demo
-make demo N=5
-
-# Run tests only (no network required)
-make test
-```
-
 ## Running with Docker
 
 ```bash
@@ -82,11 +61,14 @@ make up
 make down
 ```
 
+## Running Evals
+There are two different evals that can be run, eval-agents which are unit tests for the agents. eval-loop is the evaluation for the overall conversation loop.
+
 ```bash
-# Run the CLI demo via Docker (uses the 'demo' Compose profile)
-make demo-docker
-N=5 make demo-docker
+make eval-agents
+make eval-loop
 ```
+
 
 The SQLite database is persisted to `./data/ola.db` on the host via a volume mount, so the operator profile survives across container restarts.
 
