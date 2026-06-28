@@ -313,6 +313,8 @@ def get_profile(operator_id: str, db_path: str = DB_PATH) -> OperatorProfile:
         category = TraitCategory(state["category"]) if state["category"] else None
         if category is None:
             continue
+        if state["text"] is None:
+            continue
         status = assign_status(state["evidence_count"], state["confirmed"])
         active.append(
             MemoryItem(

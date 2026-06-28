@@ -56,7 +56,10 @@ def setup_tracing() -> None:
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
-    mlflow.pydantic_ai.autolog()
+    # pydantic-ai autolog is incompatible with pydantic-ai>=2.0 (injects `instrument`
+    # kwarg that no longer exists in Agent.__init__). Disable it; tracing still works
+    # via @mlflow.trace decorators on each agent wrapper.
+    mlflow.pydantic_ai.autolog(disable=True)
     print(f"  MLflow tracing enabled → {MLFLOW_TRACKING_URI} / {MLFLOW_EXPERIMENT}")
 
     _setup_done = True

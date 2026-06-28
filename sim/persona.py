@@ -112,6 +112,11 @@ def get_operators() -> list[dict]:
     return OPERATORS
 
 
+def get_eval_operator_ids() -> list[str]:
+    """Return all operator IDs that have ground-truth data for eval."""
+    return list(_GROUND_TRUTH.keys())
+
+
 def get_machine_type(operator_id: str) -> str | None:
     return next((op["machine_type"] for op in OPERATORS if op["id"] == operator_id), None)
 

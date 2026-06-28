@@ -1,4 +1,4 @@
-.PHONY: install sync lint lint-fix typecheck check test eval-agents eval-loop mlflow-ui up down clean
+.PHONY: install sync lint lint-fix typecheck check test eval-agents eval-loop eval mlflow-ui up down clean
 
 # ── Dev setup ─────────────────────────────────────────────────────────────────
 
@@ -27,11 +27,20 @@ test:
 	uv run python -m pytest tests/ -v
 
 # ── Eval — MLflow logging ─────────────────────────────────────────────────────
+# Agent evals: make eval-agents
+# Loop eval:   make loop-eval [OPERATOR=op-demo-01] [N=10] [SKIP_CONV=1]
+# Both:        make eval
+
 eval-agents:
 	uv run python -m eval.run_agent_evals
 
 eval-loop:
-	uv run python -m eval.run_loop_evals --operator-id $(or $(OPERATOR),op-demo-01) --n $(or $(N),10)
+	uv run python -m eval.run_loop_evals \
+		--operator-id $(or $(OPERATOR),op-demo-01) \
+		--n $(or $(N),10) \
+		$(if $(SKIP_CONV),--skip-conversation,)
+
+eval: eval-agents eval-loop
 
 mlflow-ui:
 	uv run mlflow ui --backend-store-uri mlruns
