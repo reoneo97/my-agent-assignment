@@ -80,7 +80,7 @@ def _build_conversation_scorers():
             "builds a profile of each operator's preferences over time. "
             "Operator input: {{ inputs }}. Assistant response: {{ outputs }}. "
             "Evaluate whether the response personalizes to the operator — using "
-            "the right instruction modality (visual/text/verbal), appropriate "
+            "the right instruction modality (visual/text/human guidance), appropriate "
             "verbosity for their confidence level, asking confirmation questions "
             "for uncertain beliefs rather than assuming, and reducing scaffolding "
             "only when confidence is established. "

@@ -233,6 +233,16 @@ EXTRACTOR_DEV = [
         "expect_signals": [{"category": "SHIFT_PATTERN", "value": "END_OF_SHIFT_FATIGUE"}],
         "must_not": [("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
     },
+    {
+        "id": "ext-d-hg1",
+        "tests": "operator asks for a person to walk them through the task -> HUMAN_GUIDANCE",
+        "event": {
+            "event_type": "question", "alarm_code": "HY-0042",
+            "content": "I've never dealt with this hydraulic fault before. Can someone come over and walk me through it step by step?",
+        },
+        "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "HUMAN_GUIDANCE"}],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL"), ("INSTRUCTION_MODALITY", "TEXT")],
+    },
 ]
 
 EXTRACTOR_HELDOUT = [

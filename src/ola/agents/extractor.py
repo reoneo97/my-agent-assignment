@@ -19,7 +19,7 @@ Rules:
 - If there are no salient signals, return an empty list.
 
 Category → canonical values (pick exactly one value per signal):
-  INSTRUCTION_MODALITY  → VISUAL | TEXT | VERBAL | HANDS_ON
+  INSTRUCTION_MODALITY  → VISUAL | TEXT | HUMAN_GUIDANCE
   ESCALATION            → ESCALATED_FAST | ESCALATED_SLOW | SELF_RESOLVED
   ISSUE_CONFIDENCE      → RESOLVED_INDEPENDENT | NEEDS_SUPPORT | CONFIDENT
   TROUBLESHOOTING       → SYSTEMATIC | MINIMAL | TRIAL_AND_ERROR
