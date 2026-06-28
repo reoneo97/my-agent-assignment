@@ -4,7 +4,7 @@ import json
 
 from pydantic_ai import Agent
 
-from ola.agents.provider import make_model
+from ola.agents.provider import make_model, FAST_SETTINGS
 from ola.telemetry import traced_agent
 
 _SYSTEM = """\
@@ -17,13 +17,19 @@ answer questions, and complete tasks. You receive a context bundle containing:
 - A personalization directive (controls tone, scaffolding, escalation posture)
 - Optionally a validation directive (ask a specific confirmation question)
 
+
+When passing instructions to the operator, first gauge the current state of the alarm resolution.
+If there is no prior conversation with the operator, only present the first step of alarm resolution. 
+Do not give a long step by step guide that can be hard to follow, keep instructions relevant to 
+the next step of the task.
+
 Follow the directives precisely. Keep responses practical and concise.
 When a validation directive is present, weave the question naturally into the reply —
 do NOT ask multiple confirmation questions at once.
 Never add friction to escalation; always make it easy for the operator to get help.
 """
 
-_agent: Agent[None, str] = Agent(make_model(), name="responder", output_type=str, system_prompt=_SYSTEM)
+_agent: Agent[None, str] = Agent(make_model(), name="responder", output_type=str, system_prompt=_SYSTEM, model_settings=FAST_SETTINGS)
 
 
 def _build_prompt_from_bundle(bundle: "ContextBundle") -> str:  # type: ignore[name-defined]

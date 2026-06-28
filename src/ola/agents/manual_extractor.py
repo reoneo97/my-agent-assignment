@@ -10,7 +10,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from ola.agents.provider import make_strong_model
+from ola.agents.provider import make_strong_model, STRONG_SETTINGS
 from ola.telemetry import traced_agent
 
 
@@ -47,7 +47,8 @@ _agent: Agent[None, KGDraft] = Agent(
     make_strong_model(),
     name="manual_extractor",
     output_type=KGDraft,
-    output_retries=3,
+    retries=3,
+    model_settings=STRONG_SETTINGS,
     system_prompt="""\
 You are extracting structured knowledge from a manufacturing procedure manual.
 Given the manual text, produce:

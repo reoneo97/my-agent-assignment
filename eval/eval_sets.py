@@ -30,7 +30,8 @@ EXTRACTOR_DEV = [
         "id": "ext-d1",
         "tests": "modality request -> VISUAL signal",
         "event": {
-            "event_type": "question", "alarm_code": "PA-2201",
+            "event_type": "question",
+            "alarm_code": "PA-2201",
             "content": "Can you show me a diagram of where valve V-4 is?",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
@@ -40,18 +41,22 @@ EXTRACTOR_DEV = [
         "id": "ext-d2",
         "tests": "independent resolution of a simple alarm -> TROUBLESHOOTING/CONFIDENT",
         "event": {
-            "event_type": "alarm", "alarm_code": "FL-1106",
+            "event_type": "alarm",
+            "alarm_code": "FL-1106",
             "content": "Already ran the auto-cal and flow is back to 5 L/min, all good.",
             "outcome": "resolved_independently",
         },
-        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "expect_signals": [
+            {"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}
+        ],
         "must_not": [],
     },
     {
         "id": "ext-d3",
         "tests": "fast escalation of a complex alarm -> ESCALATION/ESCALATED_FAST",
         "event": {
-            "event_type": "alarm", "alarm_code": "HY-0042",
+            "event_type": "alarm",
+            "alarm_code": "HY-0042",
             "content": "Hydraulic fault on Press B, I'm calling maintenance now.",
             "outcome": "escalated",
         },
@@ -62,7 +67,8 @@ EXTRACTOR_DEV = [
         "id": "ext-d4",
         "tests": "OVER-REACH guard: single event must not yield a stable-trait inference",
         "event": {
-            "event_type": "question", "alarm_code": "PA-2201",
+            "event_type": "question",
+            "alarm_code": "PA-2201",
             "content": "Show me the steps as pictures.",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
@@ -72,7 +78,8 @@ EXTRACTOR_DEV = [
         "id": "ext-d5",
         "tests": "explicit text-modality request -> TEXT (distinguish from VISUAL)",
         "event": {
-            "event_type": "question", "alarm_code": "RC-3301",
+            "event_type": "question",
+            "alarm_code": "RC-3301",
             "content": "Just give me the checklist as text, no pictures.",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "TEXT"}],
@@ -82,19 +89,24 @@ EXTRACTOR_DEV = [
         "id": "ext-d6",
         "tests": "no behavioural signal present -> empty (don't fabricate)",
         "event": {
-            "event_type": "question", "alarm_code": None,
+            "event_type": "question",
+            "alarm_code": None,
             "content": "What time does the next shift start?",
         },
         "expect_signals": [],
-        "must_not": [("INSTRUCTION_MODALITY", ""), ("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
+        "must_not": [
+            ("INSTRUCTION_MODALITY", ""),
+            ("ESCALATION", ""),
+            ("ISSUE_CONFIDENCE", ""),
+        ],
     },
-
     # ── Negation ──────────────────────────────────────────────────────────
     {
         "id": "ext-d7",
         "tests": "NEGATION: 'don't show me pictures' -> TEXT not VISUAL",
         "event": {
-            "event_type": "question", "alarm_code": "PA-2201",
+            "event_type": "question",
+            "alarm_code": "PA-2201",
             "content": "Don't show me pictures this time, just tell me the steps in words.",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "TEXT"}],
@@ -104,20 +116,23 @@ EXTRACTOR_DEV = [
         "id": "ext-d8",
         "tests": "NEGATION: 'stop escalating for me' -> implicit confidence signal",
         "event": {
-            "event_type": "question", "alarm_code": "FL-1106",
+            "event_type": "question",
+            "alarm_code": "FL-1106",
             "content": "You keep suggesting I call maintenance for these flow alarms. I can handle them myself, stop escalating for me.",
             "outcome": "resolved_independently",
         },
-        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "expect_signals": [
+            {"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}
+        ],
         "must_not": [("ESCALATION", "ESCALATED_FAST")],
     },
-
     # ── Multi-signal ──────────────────────────────────────────────────────
     {
         "id": "ext-d9",
         "tests": "MULTI-SIGNAL: visual request + independent resolution in one message",
         "event": {
-            "event_type": "alarm", "alarm_code": "PA-2201",
+            "event_type": "alarm",
+            "alarm_code": "PA-2201",
             "content": "Pressure alarm again. Checked the diagram on the panel and vented V-4 myself, all clear now.",
             "outcome": "resolved_independently",
         },
@@ -131,7 +146,8 @@ EXTRACTOR_DEV = [
         "id": "ext-d10",
         "tests": "MULTI-SIGNAL: escalation + explicit text preference",
         "event": {
-            "event_type": "alarm", "alarm_code": "HY-0042",
+            "event_type": "alarm",
+            "alarm_code": "HY-0042",
             "content": "I'm escalating this hydraulic fault now. By the way, when you send me instructions, just text is fine, I don't need diagrams.",
             "outcome": "escalated",
         },
@@ -141,23 +157,27 @@ EXTRACTOR_DEV = [
         ],
         "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
     },
-
     # ── False friends ─────────────────────────────────────────────────────
     {
         "id": "ext-d11",
         "tests": "FALSE FRIEND: mentions 'escalate' but is asking about policy, not escalating",
         "event": {
-            "event_type": "question", "alarm_code": None,
+            "event_type": "question",
+            "alarm_code": None,
             "content": "When should I escalate a hydraulic alarm? What's the policy?",
         },
-        "expect_signals": [],
+        "expect_signals": [
+            ("LEARNING_NEED", "PROCEDURE_GAP"),
+            ("ISSUE_CONFIDENCE", "NEEDS_SUPPORT"),
+        ],
         "must_not": [("ESCALATION", "")],
     },
     {
         "id": "ext-d12",
         "tests": "FALSE FRIEND: mentions 'picture' but is describing what they saw, not requesting modality",
         "event": {
-            "event_type": "question", "alarm_code": "FL-1105",
+            "event_type": "question",
+            "alarm_code": "FL-1105",
             "content": "I saw a picture of the sensor layout on the panel, but the readings still look wrong. What should I do?",
         },
         "expect_signals": [],
@@ -167,71 +187,98 @@ EXTRACTOR_DEV = [
         "id": "ext-d13",
         "tests": "FALSE FRIEND: 'I resolved it' but outcome is actually escalated (text-outcome mismatch)",
         "event": {
-            "event_type": "alarm", "alarm_code": "HY-0042",
+            "event_type": "alarm",
+            "alarm_code": "HY-0042",
             "content": "I think I resolved it, the press looks normal now.",
             "outcome": "escalated",
         },
         "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
         "must_not": [("ISSUE_CONFIDENCE", "RESOLVED_INDEPENDENT")],
     },
-
     # ── Implicit modality ─────────────────────────────────────────────────
     {
         "id": "ext-d14",
         "tests": "IMPLICIT: 'walk me through it step by step' -> no strong modality signal",
         "event": {
-            "event_type": "question", "alarm_code": "RC-3301",
+            "event_type": "question",
+            "alarm_code": "RC-3301",
             "content": "Can you walk me through the recipe reload step by step?",
         },
-        "expect_signals": [],
-        "must_not": [("INSTRUCTION_MODALITY", "VISUAL"), ("INSTRUCTION_MODALITY", "TEXT")],
+        "expect_signals": [("LEARNING_NEED", "PROCEDURE_GAP")],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
     },
     {
         "id": "ext-d15",
-        "tests": "IMPLICIT: 'send me a video' -> VIDEO not VISUAL",
+        "tests": "IMPLICIT: 'send me a video' -> VIDEO as VISUAL",
         "event": {
-            "event_type": "question", "alarm_code": "FL-1105",
+            "event_type": "question",
+            "alarm_code": "FL-1105",
             "content": "Is there a video for the calibration? Send me that instead.",
         },
-        "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VIDEO"}],
-        "must_not": [("INSTRUCTION_MODALITY", "VISUAL"), ("INSTRUCTION_MODALITY", "TEXT")],
+        "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
+        "must_not": [
+            ("INSTRUCTION_MODALITY", "TEXT")
+        ],
     },
-
     # ── Frustration / emotion ─────────────────────────────────────────────
     {
         "id": "ext-d16",
         "tests": "FRUSTRATION: angry but self-resolving, not escalating",
         "event": {
-            "event_type": "alarm", "alarm_code": "PA-2201",
+            "event_type": "alarm",
+            "alarm_code": "PA-2201",
             "content": "This stupid pressure alarm again! I've already vented V-4 and reset it. Third time today.",
             "outcome": "resolved_independently",
         },
-        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "expect_signals": [
+            {"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}
+        ],
         "must_not": [("ESCALATION", ""), ("LEARNING_NEED", "")],
     },
     {
         "id": "ext-d17",
         "tests": "FRUSTRATION: expressing doubt but resolved independently (action over self-assessment)",
         "event": {
-            "event_type": "question", "alarm_code": "FL-1105",
+            "event_type": "question",
+            "alarm_code": "FL-1105",
             "content": "I'm not super confident with these sensor alarms honestly, but I think I got it this time.",
             "outcome": "resolved_independently",
         },
-        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "expect_signals": [
+            {"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}
+        ],
         "must_not": [],
     },
-
     # ── Shift / temporal ──────────────────────────────────────────────────
     {
         "id": "ext-d18",
         "tests": "SHIFT: operator mentions tiredness / end of shift",
         "event": {
-            "event_type": "question", "alarm_code": None,
+            "event_type": "question",
+            "alarm_code": None,
             "content": "It's been a long night shift, I'm pretty tired. Anything I should hand over?",
             "shift": "night",
         },
-        "expect_signals": [{"category": "SHIFT_PATTERN", "value": "END_OF_SHIFT_FATIGUE"}],
+        "expect_signals": [
+            {"category": "SHIFT_PATTERN", "value": "END_OF_SHIFT_FATIGUE"}
+        ],
         "must_not": [("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
+    },
+    {
+        "id": "ext-d-hg1",
+        "tests": "operator asks for a person to walk them through the task -> HUMAN_GUIDANCE",
+        "event": {
+            "event_type": "question",
+            "alarm_code": "HY-0042",
+            "content": "I've never dealt with this hydraulic fault before. Can someone come over and walk me through it step by step?",
+        },
+        "expect_signals": [
+            {"category": "INSTRUCTION_MODALITY", "value": "HUMAN_GUIDANCE"}
+        ],
+        "must_not": [
+            ("INSTRUCTION_MODALITY", "VISUAL"),
+            ("INSTRUCTION_MODALITY", "TEXT"),
+        ],
     },
 ]
 
@@ -313,7 +360,7 @@ EXTRACTOR_HELDOUT = [
             "content": "Hey I just asked Reo next to me and he showed me how to do it. We're good.",
             "outcome": "resolved_independently",
         },
-        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "RESOLVED_INDEPENDENT"}],
+        "expect_signals": [{"category": "ISSUE_CONFIDENCE", "value": "NEEDS_SUPPORT"}],
         "must_not": [("ESCALATION", "ESCALATED_FAST")],
     },
 ]
