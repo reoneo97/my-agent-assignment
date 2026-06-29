@@ -140,10 +140,3 @@ tests/
 - Extraction can over-generalize from thin evidence — the count-based tier is the backstop.
 - In production, consider [Mem0](https://github.com/mem0ai/mem0) / [Letta](https://github.com/letta-ai/letta) / [Zep](https://github.com/getzep/zep) for the memory layer; the hand-rolled store here is intentional for transparency.
 
-## Out of scope (later stages)
-
-- **Stage 2** — Knowledge graph (Neo4j): domain ontology + alarm-code projection as operator→entity edges.
-- **Stage 3** — Evaluation harness: precision/recall vs hidden ground-truth traits; LLM-as-judge for personalization quality.
-- Reflection organ for novel pattern discovery.
-- Recency decay / drift weighting on the fold.
-- UI (Streamlit panel showing the live profile).
