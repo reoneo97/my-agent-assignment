@@ -61,6 +61,9 @@ class InteractionResponse(BaseModel):
     signals_extracted: list[SignalOut]
     memory_operations: list[MemoryOpOut]
     profile: ProfileOut
+    # Populated only when this interaction closed a session — the session-scope
+    # consolidation diff, so the UI can surface the same before/after modal as End Shift.
+    consolidation: "ShiftEndResponse | None" = None
 
 
 # ── /api/shift/end ────────────────────────────────────────────────────────────
@@ -152,3 +155,7 @@ class EvalResponse(BaseModel):
     missed: list[TraitMatch]
     spurious: list[str]
     score: float  # matched / (matched + missed + spurious)
+
+
+# Resolve InteractionResponse.consolidation forward ref now that ShiftEndResponse exists.
+InteractionResponse.model_rebuild()

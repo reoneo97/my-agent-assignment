@@ -42,6 +42,8 @@ export interface InteractionResponse {
   signals_extracted: Signal[];
   memory_operations: MemoryOp[];
   profile: Profile;
+  // Present only when this interaction closed a session (session-scope consolidation).
+  consolidation?: ShiftEndResponse | null;
 }
 
 export interface TierTransition {

@@ -59,6 +59,7 @@ async def decide_operations(
     current_items: list[MemoryItem],
     operator_id: str,
     source_event_id: str,
+    source: str = "hot_path",
 ) -> list[MemoryOperation]:
     if not signals:
         return []
@@ -106,7 +107,7 @@ Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
                 op_type="NOOP",
                 source_event_id=source_event_id,
                 rationale="memory_manager structured-output failure — graceful fallback",
-                source="hot_path",
+                source=source,
                 timestamp=now,
             )
             for _ in signals
@@ -142,7 +143,7 @@ Return one operation per signal (ADD/REINFORCE/SUPERSEDE/NOOP).
                 category=category,
                 source_event_id=source_event_id,
                 rationale=dec.rationale,
-                source="hot_path",
+                source=source,
                 timestamp=now,
             )
         )
