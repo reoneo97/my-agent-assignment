@@ -38,8 +38,9 @@ from mlflow.genai import scorer  # noqa: E402
 from ola.telemetry import setup_tracing
 from ola.agents.extractor import extract_signals
 from ola.agents.memory_manager import decide_operations
+from ola.agents.reviewer import review_conversation
 from ola.domain.events import OperatorInteraction
-from ola.domain.memory import MemoryItem
+from ola.domain.memory import MemoryItem, OperatorProfile
 from ola.domain.signals import BehaviouralSignal, TraitCategory
 from eval.eval_sets import (
     EXTRACTOR_DEV,
@@ -48,6 +49,7 @@ from eval.eval_sets import (
     MEMORY_MANAGER_DEV,
     MEMORY_MANAGER_HELDOUT,
     MEMORY_MANAGER_ZH,
+    REVIEWER_DEV,
 )
 
 setup_tracing()
@@ -64,6 +66,17 @@ setup_tracing()
 def extractor_case_to_row(case: dict) -> dict:
     return {
         "inputs": {"event": case["event"]},
+        "expectations": {
+            "expect_signals": case.get("expect_signals", []),
+            "must_not": case.get("must_not", []),
+        },
+        "tags": {"id": case["id"], "tests": case["tests"]},
+    }
+
+
+def reviewer_case_to_row(case: dict) -> dict:
+    return {
+        "inputs": {"turns": case["turns"], "scope": case.get("scope", "session")},
         "expectations": {
             "expect_signals": case.get("expect_signals", []),
             "must_not": case.get("must_not", []),
@@ -107,6 +120,18 @@ async def extractor_predict_fn(event: dict) -> list[dict]:
         requested_modality=event.get("requested_modality"),
     )
     signals = await extract_signals(interaction)
+    return [{"category": s.category.value, "value": s.value} for s in signals]
+
+
+async def reviewer_predict_fn(turns: list[dict], scope: str) -> list[dict]:
+    profile = OperatorProfile(operator_id="eval-operator", active_items=[])
+    signals, _ = await review_conversation(
+        turns=turns,
+        profile=profile,
+        operator_id="eval-operator",
+        scope=scope,
+        sentinel_event_id="eval-sentinel",
+    )
     return [{"category": s.category.value, "value": s.value} for s in signals]
 
 
@@ -195,6 +220,34 @@ def extractor_correctness(outputs: list[dict], expectations: dict) -> Feedback:
 
 
 @scorer
+def reviewer_correctness(outputs: list[dict], expectations: dict) -> Feedback:
+    """Expected longer-range signals present, must_not signals absent, no fabrication."""
+    details = []
+
+    for expected in expectations.get("expect_signals", []):
+        found = any(
+            o["category"] == expected["category"] and o["value"] == expected["value"]
+            for o in outputs
+        )
+        if not found:
+            details.append(f"MISSING: {expected}")
+
+    for category, substr in expectations.get("must_not", []):
+        violation = any(
+            o["category"] == category and (not substr or substr in o["value"])
+            for o in outputs
+        )
+        if violation:
+            details.append(f"MUST_NOT violated: {category}/{substr}")
+
+    if not expectations.get("expect_signals") and outputs:
+        details.append(f"FABRICATED: {len(outputs)} signals from no-signal thread")
+
+    passed = not details
+    return Feedback(value=passed, rationale="; ".join(details) if details else "pass")
+
+
+@scorer
 def memory_manager_correctness(outputs: list[dict], expectations: dict) -> Feedback:
     """Expected ops present, forbidden ops absent."""
     details = []
@@ -247,6 +300,17 @@ def run_extractor_eval(cases: list[dict], set_name: str) -> float:
     return results.metrics.get("extractor_correctness/mean", 0.0)
 
 
+def run_reviewer_eval(cases: list[dict], set_name: str) -> float:
+    dataset = [reviewer_case_to_row(c) for c in cases]
+    results = mlflow.genai.evaluate(
+        data=dataset,
+        predict_fn=reviewer_predict_fn,
+        scorers=[reviewer_correctness],
+    )
+    _label_run(results.run_id, f"reviewer-eval-{set_name}", {"agent": "reviewer", "set": set_name})
+    return results.metrics.get("reviewer_correctness/mean", 0.0)
+
+
 def run_memory_manager_eval(cases: list[dict], set_name: str) -> float:
     dataset = [memory_manager_case_to_row(c) for c in cases]
     results = mlflow.genai.evaluate(
@@ -268,6 +332,11 @@ def main():
         run_extractor_eval(EXTRACTOR_ZH, "zh"),
     ]
     print(f"extractor    mean_correctness={sum(ext_scores) / len(ext_scores):.0%}")
+
+    rev_scores = [
+        run_reviewer_eval(REVIEWER_DEV, "dev"),
+    ]
+    print(f"reviewer     mean_correctness={sum(rev_scores) / len(rev_scores):.0%}")
 
     mm_scores = [
         run_memory_manager_eval(MEMORY_MANAGER_DEV, "dev"),

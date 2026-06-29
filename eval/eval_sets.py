@@ -52,18 +52,6 @@ EXTRACTOR_DEV = [
         "must_not": [],
     },
     {
-        "id": "ext-d3",
-        "tests": "fast escalation of a complex alarm -> ESCALATION/ESCALATED_FAST",
-        "event": {
-            "event_type": "alarm",
-            "alarm_code": "HY-0042",
-            "content": "Hydraulic fault on Press B, I'm calling maintenance now.",
-            "outcome": "escalated",
-        },
-        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
-        "must_not": [],
-    },
-    {
         "id": "ext-d4",
         "tests": "OVER-REACH guard: single event must not yield a stable-trait inference",
         "event": {
@@ -144,7 +132,7 @@ EXTRACTOR_DEV = [
     },
     {
         "id": "ext-d10",
-        "tests": "MULTI-SIGNAL: escalation + explicit text preference",
+        "tests": "LOCAL-ONLY: extract TEXT preference; escalation is the Reviewer's job (over-reach guard)",
         "event": {
             "event_type": "alarm",
             "alarm_code": "HY-0042",
@@ -152,10 +140,9 @@ EXTRACTOR_DEV = [
             "outcome": "escalated",
         },
         "expect_signals": [
-            {"category": "ESCALATION", "value": "ESCALATED_FAST"},
             {"category": "INSTRUCTION_MODALITY", "value": "TEXT"},
         ],
-        "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
+        "must_not": [("INSTRUCTION_MODALITY", "VISUAL"), ("ESCALATION", "")],
     },
     # ── False friends ─────────────────────────────────────────────────────
     {
@@ -182,18 +169,6 @@ EXTRACTOR_DEV = [
         },
         "expect_signals": [],
         "must_not": [("INSTRUCTION_MODALITY", "VISUAL")],
-    },
-    {
-        "id": "ext-d13",
-        "tests": "FALSE FRIEND: 'I resolved it' but outcome is actually escalated (text-outcome mismatch)",
-        "event": {
-            "event_type": "alarm",
-            "alarm_code": "HY-0042",
-            "content": "I think I resolved it, the press looks normal now.",
-            "outcome": "escalated",
-        },
-        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
-        "must_not": [("ISSUE_CONFIDENCE", "RESOLVED_INDEPENDENT")],
     },
     # ── Implicit modality ─────────────────────────────────────────────────
     {
@@ -249,21 +224,6 @@ EXTRACTOR_DEV = [
         ],
         "must_not": [],
     },
-    # ── Shift / temporal ──────────────────────────────────────────────────
-    {
-        "id": "ext-d18",
-        "tests": "SHIFT: operator mentions tiredness / end of shift",
-        "event": {
-            "event_type": "question",
-            "alarm_code": None,
-            "content": "It's been a long night shift, I'm pretty tired. Anything I should hand over?",
-            "shift": "night",
-        },
-        "expect_signals": [
-            {"category": "SHIFT_PATTERN", "value": "END_OF_SHIFT_FATIGUE"}
-        ],
-        "must_not": [("ESCALATION", ""), ("ISSUE_CONFIDENCE", "")],
-    },
     {
         "id": "ext-d-hg1",
         "tests": "operator asks for a person to walk them through the task -> HUMAN_GUIDANCE",
@@ -292,17 +252,6 @@ EXTRACTOR_HELDOUT = [
             "content": "Walk me through it with screenshots if you have them.",
         },
         "expect_signals": [{"category": "INSTRUCTION_MODALITY", "value": "VISUAL"}],
-        "must_not": [],
-    },
-    {
-        "id": "ext-h2",
-        "tests": "over-escalation of a self-resolve alarm -> ESCALATION signal",
-        "event": {
-            "event_type": "alarm", "alarm_code": "FL-1106",
-            "content": "Low flow alarm again, escalating to maintenance.",
-            "outcome": "escalated",
-        },
-        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
         "must_not": [],
     },
     {
@@ -512,17 +461,6 @@ EXTRACTOR_ZH = [
         "must_not": [],
     },
     {
-        "id": "ext-zh3",
-        "tests": "Mandarin escalation of complex alarm -> ESCALATED_FAST",
-        "event": {
-            "event_type": "alarm", "alarm_code": "HY-0042",
-            "content": "B 压机液压故障，我现在马上叫维修。",
-            "outcome": "escalated",
-        },
-        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
-        "must_not": [],
-    },
-    {
         "id": "ext-zh4",
         "tests": "Mandarin struggle on complex alarm -> NEEDS_SUPPORT",
         "event": {
@@ -563,5 +501,98 @@ MEMORY_MANAGER_ZH = [
              "text": "Prefers visual instructions", "status": "tentative", "evidence_count": 2},
         ],
         "expect_op": {"op_type": "REINFORCE", "target_item_id": "mem_001"},
+    },
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REVIEWER (conversation-level signal extraction)
+# input: a full turn-marked conversation thread + scope
+# output: longer-range BehaviouralSignals (escalation / troubleshooting / shift)
+#
+# Same scoring conventions as the Extractor set: every signal in `expect_signals`
+# must be produced (category AND value), `must_not` (category, value-substring)
+# must be absent. Turn ordering/timing is what lets the reviewer tell a fast
+# escalation from a slow one — the cases below exercise exactly that.
+# ─────────────────────────────────────────────────────────────────────────────
+
+REVIEWER_DEV = [
+    {
+        "id": "rev-d1",
+        "tests": "early escalation across the thread -> ESCALATED_FAST",
+        "scope": "session",
+        "turns": [
+            {"id": "e1", "role": "system", "event_type": "alarm",
+             "content": "Alarm HY-0042 fired on Press-B.", "timestamp": "2026-06-27T00:00:00Z"},
+            {"id": "e2", "role": "operator", "event_type": "question",
+             "content": "Hydraulic fault on Press B, I'm calling maintenance right now.",
+             "timestamp": "2026-06-27T00:00:25Z"},
+        ],
+        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_FAST"}],
+        "must_not": [("INSTRUCTION_MODALITY", ""), ("ISSUE_CONFIDENCE", "")],
+    },
+    {
+        "id": "rev-d2",
+        "tests": "operator works the problem over many turns before escalating -> ESCALATED_SLOW",
+        "scope": "session",
+        "turns": [
+            {"id": "e1", "role": "system", "event_type": "alarm",
+             "content": "Alarm HY-0042 fired on Press-B.", "timestamp": "2026-06-27T00:00:00Z"},
+            {"id": "e2", "role": "operator", "event_type": "question",
+             "content": "Let me check the hydraulic pressure gauge first.", "timestamp": "2026-06-27T00:01:00Z"},
+            {"id": "e3", "role": "assistant", "event_type": "reply",
+             "content": "Sure — the gauge is on the left manifold.", "timestamp": "2026-06-27T00:01:20Z"},
+            {"id": "e4", "role": "operator", "event_type": "question",
+             "content": "Pressure looks low. Tried bleeding the line and reseating the coupler, still faulting.",
+             "timestamp": "2026-06-27T00:09:00Z"},
+            {"id": "e5", "role": "operator", "event_type": "resolution_action",
+             "content": "Ok I've exhausted what I can do, escalating to maintenance now.",
+             "timestamp": "2026-06-27T00:14:00Z"},
+        ],
+        "expect_signals": [{"category": "ESCALATION", "value": "ESCALATED_SLOW"}],
+        "must_not": [("ESCALATION", "ESCALATED_FAST")],
+    },
+    {
+        "id": "rev-d3",
+        "tests": "methodical step-by-step diagnosis -> TROUBLESHOOTING/SYSTEMATIC",
+        "scope": "session",
+        "turns": [
+            {"id": "e1", "role": "system", "event_type": "alarm",
+             "content": "Alarm FL-1105 fired on Line-2.", "timestamp": "2026-06-27T00:00:00Z"},
+            {"id": "e2", "role": "operator", "event_type": "question",
+             "content": "First I'll check the display panel readings.", "timestamp": "2026-06-27T00:00:30Z"},
+            {"id": "e3", "role": "operator", "event_type": "question",
+             "content": "Readings ok, next I'll verify the sensor wiring against the manual.",
+             "timestamp": "2026-06-27T00:02:00Z"},
+            {"id": "e4", "role": "operator", "event_type": "resolution_action",
+             "content": "Found a loose connector, reseated it, flow restored.", "timestamp": "2026-06-27T00:04:00Z"},
+        ],
+        "expect_signals": [{"category": "TROUBLESHOOTING", "value": "SYSTEMATIC"}],
+        "must_not": [],
+    },
+    {
+        "id": "rev-d4",
+        "tests": "SCOPE GUARD: session scope must not emit SHIFT_PATTERN even if fatigue is mentioned",
+        "scope": "session",
+        "turns": [
+            {"id": "e1", "role": "operator", "event_type": "question",
+             "content": "Long night shift, I'm pretty tired, but I sorted the flow alarm myself.",
+             "timestamp": "2026-06-27T00:00:00Z"},
+        ],
+        "expect_signals": [],
+        "must_not": [("SHIFT_PATTERN", ""), ("INSTRUCTION_MODALITY", "")],
+    },
+    {
+        "id": "rev-d5",
+        "tests": "SHIFT scope: slower toward the end of a night shift -> SHIFT_PATTERN/SLOWER_LATE_NIGHT",
+        "scope": "shift",
+        "turns": [
+            {"id": "e1", "role": "operator", "event_type": "question",
+             "content": "Early in the shift I cleared two alarms quickly.", "timestamp": "2026-06-27T00:00:00Z"},
+            {"id": "e2", "role": "operator", "event_type": "question",
+             "content": "It's the last hour of the night shift and I'm dragging — this one took me much longer.",
+             "timestamp": "2026-06-27T06:30:00Z"},
+        ],
+        "expect_signals": [{"category": "SHIFT_PATTERN", "value": "SLOWER_LATE_NIGHT"}],
+        "must_not": [],
     },
 ]

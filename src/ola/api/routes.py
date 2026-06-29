@@ -89,6 +89,15 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
 
     signals, ops, profile, reply = await process_interaction(interaction_obj, session_id=session_id, db_path=_DB)
 
+    # When the interaction closed the session (explicit Resolve/Escalate), run the
+    # lighter session-scope consolidation so session-level signals (escalation,
+    # troubleshooting) land immediately — shift-level + synopsis wait for End Shift.
+    consolidation = None
+    if interaction_obj.outcome:
+        consolidation = await run_consolidation(
+            req.operator_id, scope="session", session_id=session_id, db_path=_DB
+        )
+
     return InteractionResponse(
         interaction=InteractionOut(
             id=interaction_obj.id,
@@ -112,6 +121,7 @@ async def interaction(req: InteractionRequest) -> InteractionResponse:
             for op in ops
         ],
         profile=_profile_out(req.operator_id),
+        consolidation=consolidation,
     )
 
 

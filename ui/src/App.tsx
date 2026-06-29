@@ -119,6 +119,12 @@ export default function App() {
       const res = await closeSession(operatorId, outcome, sessionId ?? undefined);
       setMessages((prev) => prev.filter((m) => m.id !== placeholder.id));
       handleInteractionResponse(res);
+      // Session close runs a session-scope consolidation; surface its diff in the
+      // same modal as End Shift (synopsis is left for End Shift).
+      if (res.consolidation) {
+        setShiftDiff(res.consolidation);
+        setProfileItems(res.consolidation.profile_after.items);
+      }
       setActiveAlarm(null);
       setSessionId(null);
     } catch (e) {

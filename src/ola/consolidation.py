@@ -1,19 +1,27 @@
 """
-run_consolidation() — per-shift batch, triggered by "End Shift" button.
-Runs on the strong model clock, never blocks the hot path.
+run_consolidation() — slow-path batch on the strong-model clock; never blocks the
+hot path. Runs at two granularities:
+  - scope="session" (End Session): extract+apply SESSION-level signals only; no
+    synopsis regen (deferred to End Shift).
+  - scope="shift"   (End Shift):   extract+apply SESSION + SHIFT-level signals and
+    regenerate the synopsis.
 
-Steps (§6.3 PRD v2):
-  1. Reviewer.consolidate → proposed memory_operations + hypotheses → persist
-  2. Outcome Resolver → resolve PENDING conformance events → fill 2×2
-  3. Tier recompute (implicit in fold)
-  4. Projection of newly-established items
-  5. Reviewer.synopsis → regenerate operator_synopsis → bump version
+Steps:
+  1. Reviewer.review_conversation → longer-range BehaviouralSignals + hypotheses
+  2. Persist signals → Memory Manager → memory_operations (one arbiter for writes)
+  3. Outcome Resolver → resolve PENDING conformance events → fill 2×2
+  4. Tier recompute (implicit in fold) → Projection of newly-established items
+  5. (shift only) Reviewer.synopsis → regenerate operator_synopsis → bump version
   6. Return before/after diff
 """
 
 from __future__ import annotations
 
-from ola.agents.reviewer import consolidate as reviewer_consolidate
+import uuid
+from datetime import datetime, timezone
+
+from ola.agents.memory_manager import decide_operations
+from ola.agents.reviewer import review_conversation
 from ola.agents.reviewer import generate_synopsis as reviewer_synopsis
 from ola.api.schemas import (
     ProfileItemOut,
@@ -29,8 +37,10 @@ from ola.kg.projection import project_profile
 from ola.memory.store import (
     append_hypothesis,
     append_operation,
+    append_signal,
     get_profile,
     get_recent_events,
+    get_session_thread,
 )
 from ola.memory.synopsis import save_synopsis
 
@@ -79,7 +89,12 @@ def _diff(before: OperatorProfile, after: OperatorProfile) -> ShiftChanges:
 _last_profiles: dict[str, OperatorProfile] = {}
 
 
-async def run_consolidation(operator_id: str, db_path: str | None = None) -> ShiftEndResponse:
+async def run_consolidation(
+    operator_id: str,
+    scope: str = "shift",
+    session_id: str | None = None,
+    db_path: str | None = None,
+) -> ShiftEndResponse:
     kwargs = {"db_path": db_path} if db_path else {}
 
     profile_before = _last_profiles.get(
@@ -87,32 +102,58 @@ async def run_consolidation(operator_id: str, db_path: str | None = None) -> Shi
     )
     profile_current = get_profile(operator_id, **kwargs)
 
-    # 1. Reviewer consolidation
-    recent_events = get_recent_events(operator_id, limit=50, **kwargs)
-    sentinel_event_id = recent_events[0]["id"] if recent_events else "no-events"
+    # 1. Gather the conversation to review.
+    #    session scope → just this session's thread (all roles, ordered, ideal for
+    #    turn markers); shift scope → recent operator events across the shift.
+    if scope == "session" and session_id:
+        turns = get_session_thread(session_id, **kwargs)
+    else:
+        # get_recent_events returns newest-first; reverse to chronological order.
+        turns = list(reversed(get_recent_events(operator_id, limit=50, **kwargs)))
+    sentinel_event_id = turns[-1]["id"] if turns else "no-events"
 
-    if recent_events:
-        ops, hypotheses = await reviewer_consolidate(
-            recent_events=recent_events,
+    # 2. Reviewer extracts longer-range signals → Memory Manager → operations.
+    if turns:
+        signals, hypotheses = await review_conversation(
+            turns=turns,
             profile=profile_current,
             operator_id=operator_id,
-            source_event_id=sentinel_event_id,
+            scope=scope,
+            sentinel_event_id=sentinel_event_id,
         )
-        for op in ops:
-            append_operation(op, **kwargs)
+        now = datetime.now(timezone.utc)
+        for sig in signals:
+            append_signal(
+                signal_id=str(uuid.uuid4()),
+                source_event_id=sig.source_event_id,
+                operator_id=operator_id,
+                category=sig.category.value,
+                value=sig.value,
+                observation=sig.observation,
+                timestamp=now,
+                **kwargs,
+            )
+        if signals:
+            ops = await decide_operations(
+                signals=signals,
+                current_items=profile_current.active_items,
+                operator_id=operator_id,
+                source_event_id=sentinel_event_id,
+                source="reviewer",
+            )
+            for op in ops:
+                append_operation(op, **kwargs)
         for h in hypotheses:
             append_hypothesis(h, **kwargs)
 
-    # 2. Outcome Resolver
+    # 3. Outcome Resolver
     resolve_pending(operator_id, db_path=db_path)
 
-    # 3. Recompute profile after reviewer ops + resolve
+    # 4. Recompute profile after reviewer ops + resolve, then project established items
     profile_after = get_profile(operator_id, **kwargs)
-
-    # 4. Projection of newly-established items
     project_profile(profile_after, profile_before)
 
-    # 5. Synopsis
+    # 5. Synopsis — regenerated on End Shift only; End Session defers it.
     from ola.memory.store import get_synopsis
     synopsis_row = get_synopsis(operator_id, **kwargs)
     synopsis_before = synopsis_row["text"] if synopsis_row else f"No synopsis yet for {operator_id}."
@@ -120,10 +161,10 @@ async def run_consolidation(operator_id: str, db_path: str | None = None) -> Shi
     diff = _diff(profile_before, profile_after)
     no_updates = not (diff.tier_transitions or diff.new_items or diff.superseded)
 
-    if no_updates and not recent_events:
+    if scope != "shift" or (no_updates and not turns):
         synopsis_after = synopsis_before
     else:
-        synopsis_after = await reviewer_synopsis(profile_after, recent_events)
+        synopsis_after = await reviewer_synopsis(profile_after, turns)
         save_synopsis(operator_id, synopsis_after, db_path=db_path)
 
     _last_profiles[operator_id] = profile_after

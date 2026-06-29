@@ -1,8 +1,14 @@
 """
-Reviewer — per-shift, strong model. Three distinct sub-tasks in one pass:
-  1. consolidate: recent events + profile → proposed MemoryOperations + Hypotheses
-  2. conformance: conformance_event + procedure steps + observed actions → ConformanceResult
-  3. synopsis: current profile + recent events → updated operator synopsis paragraph
+Reviewer — per-session/per-shift, strong model. Two distinct sub-tasks:
+  1. review_conversation: full turn-marked conversation + profile → longer-range
+     BehaviouralSignals (escalation / troubleshooting / shift patterns) + Hypotheses.
+     Signals are written into the profile via the Memory Manager (one arbiter for
+     all profile writes), NOT emitted as memory operations directly.
+  2. synopsis: current profile + recent events → updated operator synopsis paragraph
+
+Local signals (instruction modality / issue confidence / learning needs) are the
+Extractor's job on the hot path; the Reviewer never re-derives them. Conformance
+is deterministic (conformance/router.py + outcome_resolver.py) — no agent here.
 """
 
 from __future__ import annotations
@@ -16,20 +22,28 @@ from pydantic_ai import Agent
 
 from ola.agents.provider import make_strong_model, STRONG_SETTINGS
 from ola.domain.memory import Hypothesis, OperatorProfile
-from ola.domain.signals import TraitCategory
+from ola.domain.signals import BehaviouralSignal, TraitCategory
 from ola.telemetry import traced_agent
 
 _model = make_strong_model()
 
+# ── Scope → allowed (longer-range) categories ─────────────────────────────────
+# Local categories are owned by the Extractor and never produced here.
+SESSION_CATEGORIES = {TraitCategory.TROUBLESHOOTING, TraitCategory.ESCALATION}
+SHIFT_CATEGORIES = SESSION_CATEGORIES | {TraitCategory.SHIFT_PATTERN}
+
+
+def _allowed_categories(scope: str) -> set[TraitCategory]:
+    return SHIFT_CATEGORIES if scope == "shift" else SESSION_CATEGORIES
+
+
 # ── Sub-schemas ───────────────────────────────────────────────────────────────
 
-class ReviewerMemoryOp(BaseModel):
-    op_type: Literal["ADD", "REINFORCE", "SUPERSEDE", "NOOP"]
-    target_item_id: str | None = None
-    text: str | None = None
-    value: str | None = None  # normalized value e.g. 'VISUAL'
-    category: str | None = None
-    rationale: str = ""
+class ReviewerSignal(BaseModel):
+    category: str  # TROUBLESHOOTING | ESCALATION | SHIFT_PATTERN
+    value: str  # canonical value e.g. 'ESCALATED_FAST'
+    observation: str  # short NL description of what was observed across the thread
+    turn: int | None = None  # 1-based turn index the signal was inferred from
 
 
 class ReviewerHypothesis(BaseModel):
@@ -38,51 +52,47 @@ class ReviewerHypothesis(BaseModel):
     evidence_summary: str
 
 
-class ConsolidateOutput(BaseModel):
-    memory_operations: list[ReviewerMemoryOp]
+class ReviewOutput(BaseModel):
+    signals: list[ReviewerSignal]
     hypotheses: list[ReviewerHypothesis]
 
 
-class ConformanceResult(BaseModel):
-    conformance: Literal["conformant", "divergent"]
-    observed_action: str
-    rationale: str
+# ── Agent ─────────────────────────────────────────────────────────────────────
 
-
-# ── Agents ────────────────────────────────────────────────────────────────────
-
-_consolidate_agent: Agent[None, ConsolidateOutput] = Agent(
+_review_agent: Agent[None, ReviewOutput] = Agent(
     _model,
-    name="reviewer.consolidate",
-    output_type=ConsolidateOutput,
+    name="reviewer.review_conversation",
+    output_type=ReviewOutput,
     retries=3,
     model_settings=STRONG_SETTINGS,
     system_prompt="""\
-You are reviewing a shift's operator interactions to update a behavioural profile.
-Given recent operator events and the current profile, propose memory operations
-(ADD/REINFORCE/SUPERSEDE/NOOP) to refine the profile, and flag any novel patterns
-or tacit-knowledge candidates as hypotheses.
+You are reviewing a FULL operator conversation to extract LONGER-RANGE behavioural
+signals that cannot be judged from a single turn — they need the whole thread.
 
-Rules:
-- Only propose operations that are supported by the evidence in the events.
-- SUPERSEDE when you see a clear pattern change, not just noise.
-- Hypotheses are patterns not yet in the profile that recur across multiple events.
-- Keep belief texts concise (one sentence).
-- Your output is PROPOSED; code rules determine final tiers.
-""",
-)
+The conversation is given as turn-marked lines:
+  [t<turn> | +<seconds>s | <role>/<event_type>] <text>
+Use the turn index and elapsed time to reason about WHEN things happened
+(e.g. an escalation early in the thread is fast; one after many turns is slow).
 
-_conformance_agent: Agent[None, ConformanceResult] = Agent(
-    _model,
-    name="reviewer.conformance",
-    output_type=ConformanceResult,
-    retries=3,
-    model_settings=STRONG_SETTINGS,
-    system_prompt="""\
-You are classifying whether an operator followed the standard procedure (SOP)
-for an alarm. Compare what the operator did (observed action) against the
-expected procedure steps. Be specific and fair — deviations are only divergent
-if they meaningfully differ from the SOP, not just stylistic variations.
+Extract only what the thread clearly supports. Each signal has a category and a
+canonical value from the vocabulary below — do NOT invent new values, and do NOT
+emit any category outside the allowed set you are told to use. Set `turn` to the
+1-based turn index the signal was inferred from. If nothing is salient, return an
+empty signal list.
+
+Category → canonical values:
+  ESCALATION       → ESCALATED_FAST | ESCALATED_SLOW | SELF_RESOLVED
+  TROUBLESHOOTING  → SYSTEMATIC | MINIMAL | TRIAL_AND_ERROR
+  SHIFT_PATTERN    → SLOWER_LATE_NIGHT | FASTER_MORNING | IRREGULAR
+
+Escalation guidance:
+- ESCALATED_FAST: operator escalates early / with little independent attempt.
+- ESCALATED_SLOW: operator works the problem over several turns before escalating.
+- SELF_RESOLVED: operator resolves without escalating.
+
+Also flag any novel recurring patterns or tacit-knowledge candidates not yet in the
+profile as hypotheses (kind = behavioural_pattern | tacit_knowledge). Keep
+descriptions to one sentence. Your output is observational; code rules decide tiers.
 """,
 )
 
@@ -102,63 +112,96 @@ Be concrete and specific. If the profile is sparse, say so and note what is know
 )
 
 
+# ── Turn-marker rendering (context engineering) ───────────────────────────────
+
+def _render_turns(turns: list[dict]) -> tuple[str, dict[int, str]]:
+    """
+    Render a conversation as turn-marked lines and return (text, turn→event_id map).
+
+    Each turn becomes:
+      [t<i> | +<seconds>s | <role>/<event_type>] <content>
+    so the Reviewer can reason about ordering/timing (fast vs slow escalation).
+    """
+    if not turns:
+        return "  (no turns)", {}
+
+    def _ts(t: dict) -> datetime | None:
+        raw = t.get("timestamp")
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(raw)
+        except (ValueError, TypeError):
+            return None
+
+    base = next((_ts(t) for t in turns if _ts(t)), None)
+
+    lines: list[str] = []
+    turn_map: dict[int, str] = {}
+    for i, t in enumerate(turns, start=1):
+        ts = _ts(t)
+        delta = int((ts - base).total_seconds()) if (ts and base) else 0
+        role = t.get("role", "?")
+        etype = t.get("event_type", "?")
+        content = (t.get("content") or "")[:300]
+        lines.append(f"  [t{i} | +{delta}s | {role}/{etype}] {content}")
+        if t.get("id"):
+            turn_map[i] = t["id"]
+    return "\n".join(lines), turn_map
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
-@traced_agent(name="reviewer.consolidate")
-async def consolidate(
-    recent_events: list[dict],
+
+@traced_agent(name="reviewer.review_conversation")
+async def review_conversation(
+    turns: list[dict],
     profile: OperatorProfile,
     operator_id: str,
-    source_event_id: str,
-) -> tuple[list, list[Hypothesis]]:
+    scope: str,
+    sentinel_event_id: str,
+) -> tuple[list[BehaviouralSignal], list[Hypothesis]]:
     """
-    Returns (list[MemoryOperation], list[Hypothesis]) — pipeline persists them.
+    Extract longer-range behavioural signals from a full conversation.
+
+    Returns (list[BehaviouralSignal], list[Hypothesis]). The caller persists the
+    signals and routes them through the Memory Manager to update the profile.
+    `scope` ("session" | "shift") gates which categories are allowed.
     """
-    from ola.domain.memory import MemoryOperation
+    allowed = _allowed_categories(scope)
+    conversation, turn_map = _render_turns(turns)
 
     items_text = "\n".join(
         f"  [{i.id[:8]}] [{i.status}, n={i.evidence_count}] ({i.category.value}) {i.text}"
         for i in profile.active_items
     ) or "  (none)"
 
-    events_text = "\n".join(
-        f"  [{e.get('role','?')}] {e.get('event_type','?')}: {e.get('content','')[:200]}"
-        for e in recent_events[-20:]  # cap context
-    )
-
+    allowed_names = ", ".join(sorted(c.value for c in allowed))
     prompt = (
-        f"Recent operator events (latest 20):\n{events_text}\n\n"
+        f"Scope: {scope}. Allowed signal categories: {allowed_names}.\n\n"
+        f"Conversation (turn-marked):\n{conversation}\n\n"
         f"Current active profile:\n{items_text}\n\n"
-        "Propose memory operations and hypotheses based on the evidence above."
+        "Extract longer-range behavioural signals and any hypotheses from the thread above."
     )
 
-    result = await _consolidate_agent.run(prompt)
+    result = await _review_agent.run(prompt)
     out = result.output
 
     now = datetime.now(timezone.utc)
-    ops: list[MemoryOperation] = []
-    for dec in out.memory_operations:
-        op_type = dec.op_type.upper()
-        if op_type not in {"ADD", "REINFORCE", "SUPERSEDE", "NOOP"}:
+    signals: list[BehaviouralSignal] = []
+    for rs in out.signals:
+        try:
+            category = TraitCategory(rs.category.strip().upper())
+        except ValueError:
             continue
-        cat = None
-        if dec.category:
-            try:
-                cat = TraitCategory(dec.category)
-            except ValueError:
-                pass
-        ops.append(
-            MemoryOperation(
-                id=str(uuid.uuid4()),
-                operator_id=operator_id,
-                op_type=op_type,  # type: ignore[arg-type]
-                target_item_id=dec.target_item_id if op_type in {"REINFORCE", "SUPERSEDE"} else None,
-                text=dec.text if op_type in {"ADD", "SUPERSEDE"} else None,
-                value=dec.value if op_type in {"ADD", "SUPERSEDE"} else None,
-                category=cat,
+        if category not in allowed:
+            continue  # never let the Reviewer emit local or out-of-scope categories
+        source_event_id = turn_map.get(rs.turn or -1, sentinel_event_id)
+        signals.append(
+            BehaviouralSignal(
+                category=category,
+                value=rs.value,
+                observation=rs.observation,
                 source_event_id=source_event_id,
-                rationale=dec.rationale,
-                source="reviewer",
-                timestamp=now,
             )
         )
 
@@ -173,26 +216,7 @@ async def consolidate(
         for h in out.hypotheses
     ]
 
-    return ops, hypotheses
-
-
-@traced_agent(name="reviewer.conformance")
-async def classify_conformance(
-    alarm_code: str,
-    procedure_title: str,
-    procedure_steps: list[str],
-    observed_outcome: str,
-    observed_text: str,
-) -> ConformanceResult:
-    prompt = (
-        f"Alarm: {alarm_code}\n"
-        f"SOP: {procedure_title}\n"
-        f"Expected steps:\n" + "\n".join(f"  {i+1}. {s}" for i, s in enumerate(procedure_steps)) + "\n\n"
-        f"What the operator did:\n  {observed_text}\n"
-        f"Outcome: {observed_outcome}"
-    )
-    result = await _conformance_agent.run(prompt)
-    return result.output
+    return signals, hypotheses
 
 
 @traced_agent(name="reviewer.synopsis")

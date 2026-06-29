@@ -218,6 +218,7 @@ async def run_eval(
 ) -> None:
     from sim.persona import get_eval_ground_truth, get_next_interaction
     from ola.pipeline import process_interaction
+    from ola.consolidation import run_consolidation
     from ola.memory.store import get_or_create_session, get_profile
     from eval.metrics import compute_inference_report
 
@@ -251,9 +252,17 @@ async def run_eval(
             session_ids.append(session_id)
             interaction = await get_next_interaction(operator_id)
             await process_interaction(interaction, session_id=session_id, db_path=db_path)
+            # Session-scope consolidation: longer-range session signals (escalation,
+            # troubleshooting) now come from the Reviewer, not the hot path.
+            await run_consolidation(
+                operator_id, scope="session", session_id=session_id, db_path=db_path
+            )
             # Close the session so the next iteration opens a fresh one.
             from ola.memory.store import close_session
             close_session(session_id, status="abandoned", db_path=db_path)
+
+        # End-of-shift consolidation: picks up shift-level patterns + synopsis.
+        await run_consolidation(operator_id, scope="shift", db_path=db_path)
 
         # Retroactively link all session traces to this MLflow run (async context
         # doesn't inherit the thread-local start_run context).
