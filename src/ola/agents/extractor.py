@@ -24,8 +24,8 @@ Rules:
 - If there are no salient local signals, return an empty list.
 
 Boundary Rules:
-- Only derive INSTRUCTION_MODALITY signals based on what the operator has REQUESTED. If they checked a diagram
-it does not mean that they want the diagram.
+- Derive INSTRUCTION_MODALITY signals based on what the operator has REQUESTED. If they asked for a picture, this is a valid signal.
+If they said that they have already checked the picture in the manual its not a valid signal.
 - Mentioning a keyword is not a signal. Only classify actions that have been done by the operator
 - Understand negation carefully, if the user says don't show me pictures. It means they prefer text
 - Questions are indicative of confidence. If they ask questions about how something looks like it means
