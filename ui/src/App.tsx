@@ -3,6 +3,7 @@ import ConversationPanel from "./components/ConversationPanel";
 import ProfilePanel from "./components/ProfilePanel";
 import SynopsisPanel from "./components/SynopsisPanel";
 import ShiftEndDiff from "./components/ShiftEndDiff";
+import SessionEndDiff from "./components/SessionEndDiff";
 import {
   sendUserMessage,
   sendSimulated,
@@ -31,6 +32,9 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [shiftBusy, setShiftBusy] = useState(false);
   const [shiftDiff, setShiftDiff] = useState<ShiftEndResponse | null>(null);
+  const [sessionDiff, setSessionDiff] = useState<
+    { result: ShiftEndResponse; outcome: "resolved_independently" | "escalated"; alarmCode?: string } | null
+  >(null);
   const [resetBusy, setResetBusy] = useState(false);
   const [activeAlarm, setActiveAlarm] = useState<Alarm | null>(null);
   const [alarmBusy, setAlarmBusy] = useState(false);
@@ -115,14 +119,15 @@ export default function App() {
     setBusy(true);
     const placeholder: Message = { id: crypto.randomUUID(), role: "assistant", text: "", loading: true };
     setMessages((prev) => [...prev, placeholder]);
+    const alarmCode = activeAlarm?.code ?? undefined;
     try {
       const res = await closeSession(operatorId, outcome, sessionId ?? undefined);
       setMessages((prev) => prev.filter((m) => m.id !== placeholder.id));
       handleInteractionResponse(res);
-      // Session close runs a session-scope consolidation; surface its diff in the
-      // same modal as End Shift (synopsis is left for End Shift).
+      // Session close runs a session-scope consolidation; surface it in the
+      // alarm-resolution modal (synopsis is left for End Shift).
       if (res.consolidation) {
-        setShiftDiff(res.consolidation);
+        setSessionDiff({ result: res.consolidation, outcome, alarmCode });
         setProfileItems(res.consolidation.profile_after.items);
       }
       setActiveAlarm(null);
@@ -134,7 +139,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [busy, operatorId, handleInteractionResponse]);
+  }, [busy, operatorId, sessionId, activeAlarm, handleInteractionResponse]);
 
   const handleEndShift = useCallback(async () => {
     if (shiftBusy) return;
@@ -247,6 +252,15 @@ export default function App() {
 
       {shiftDiff && (
         <ShiftEndDiff result={shiftDiff} onDismiss={() => setShiftDiff(null)} />
+      )}
+
+      {sessionDiff && (
+        <SessionEndDiff
+          result={sessionDiff.result}
+          outcome={sessionDiff.outcome}
+          alarmCode={sessionDiff.alarmCode}
+          onDismiss={() => setSessionDiff(null)}
+        />
       )}
     </div>
   );
